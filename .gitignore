@@ -1,0 +1,9 @@
+# 忽略编译出来的二进制文件
+mihoctl
+mihoctl.exe
+
+# 忽略 Mac 系统生成的隐藏文件
+.DS_Store
+
+# 忽略 Go 的临时测试文件
+*.test
