@@ -156,12 +156,12 @@ case "${OS_NAME}" in
     setcap -r "${MIHOMO_BIN}" 2>/dev/null || true
     stop_linux_runtime "${MIHOMO_BIN}"
 
-    echo
-    echo "TUN capability removed."
-    echo "If Mihomo was already running, it has been restarted without the TUN capability."
-    echo "If you were using TUN mode, switch back with:"
-    echo "  mihoctl mode env"
-    echo "  mihoctl off"
+echo
+echo "TUN support has been removed."
+echo "If Mihomo was already running, it has been restarted automatically."
+echo "If you were using TUN mode, switch back with:"
+echo "  mihoctl mode env"
+echo "  mihoctl off"
     ;;
   Darwin)
     if [[ ! -f "${TARGET_CONFIG}" ]]; then
@@ -174,12 +174,12 @@ case "${OS_NAME}" in
     "${MIHOCTL_BIN}" --config "${TARGET_CONFIG}" service disable
     stop_darwin_runtime "${TARGET_MIHOMO_BIN}"
 
-    echo
-    echo "TUN service disabled."
-    echo "If Mihomo was already running, it has been switched back from LaunchDaemon mode."
-    echo "If you were using TUN mode, switch back with:"
-    echo "  mihoctl mode env"
-    echo "  mihoctl off"
+echo
+echo "TUN support has been removed."
+echo "If Mihomo was already running, it has been switched back automatically."
+echo "If you were using TUN mode, switch back with:"
+echo "  mihoctl mode env"
+echo "  mihoctl off"
     ;;
   *)
     echo "TUN helper is only supported on Linux and macOS." >&2

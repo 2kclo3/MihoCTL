@@ -184,30 +184,30 @@ upsert_shell_integration "bash" "${HOME}/.bashrc"
 upsert_shell_integration "zsh" "${ZDOTDIR:-${HOME}}/.zshrc"
 
 echo
-echo "MihoCTL installation completed."
-echo "Binary: ${INSTALL_BIN}"
+echo "MihoCTL is ready."
+echo "Command: ${INSTALL_BIN}"
 echo
 
 if [[ ":${PATH}:" != *":${TARGET_DIR}:"* ]]; then
-  echo "Add this directory to PATH if needed:"
+  echo "If this shell still cannot find \`mihoctl\`, add it to PATH:"
   echo "  export PATH=\"${TARGET_DIR}:\$PATH\""
   echo
 fi
 
-echo "You can start with:"
+echo "Quick start:"
 echo "  ${INSTALL_BIN} sub add <subscription-url>"
 echo "  ${INSTALL_BIN} on"
 echo
 echo "If you want TUN mode, run once:"
 echo "  sudo ${INSTALL_TUN_HELPER}"
-echo "Then switch with:"
+echo "Then enable it with:"
 echo "  ${INSTALL_BIN} mode tun"
 echo "  ${INSTALL_BIN} on"
 echo
-echo "If you later want to remove TUN authorization/service, run:"
+echo "If you later want to remove TUN authorization or service support:"
 echo "  sudo ${UNINSTALL_TUN_HELPER}"
 echo
 echo "Shell completion was installed for bash/fish/zsh."
 echo "Bash/Zsh startup files were updated automatically."
-echo "Open a new terminal, or reload your shell config to use completion immediately."
-echo "The shell wrapper also syncs env mode changes back to the current terminal when you run on/off/mode through the shell function."
+echo "Open a new terminal, or run \`source ~/.zshrc\` / \`source ~/.bashrc\` to use completion right away."
+echo "After shell integration is active, running \`mihoctl on\`, \`off\`, or \`mode\` will also sync env-mode changes back to the current terminal."

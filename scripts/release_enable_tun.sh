@@ -160,12 +160,12 @@ case "${OS_NAME}" in
     setcap cap_net_admin,cap_net_raw+ep "${MIHOMO_BIN}"
     restart_linux_runtime "${MIHOMO_BIN}"
 
-    echo
-    echo "TUN capability granted successfully."
-    echo "If Mihomo was already running, it has been restarted with the new capability."
-    echo "You can now rerun:"
-    echo "  mihoctl mode tun"
-    echo "  mihoctl on"
+echo
+echo "TUN is ready."
+echo "If Mihomo was already running, it has been restarted automatically."
+echo "Next step:"
+echo "  mihoctl mode tun"
+echo "  mihoctl on"
     ;;
   Darwin)
     if [[ ! -f "${TARGET_CONFIG}" ]]; then
@@ -177,12 +177,12 @@ case "${OS_NAME}" in
     echo "==> Registering Mihomo as a system LaunchDaemon for TUN"
     restart_darwin_runtime "${TARGET_MIHOMO_BIN}"
 
-    echo
-    echo "TUN service enabled successfully."
-    echo "If Mihomo was already running, it has been switched to LaunchDaemon mode."
-    echo "You can now rerun:"
-    echo "  mihoctl mode tun"
-    echo "  mihoctl on"
+echo
+echo "TUN is ready."
+echo "If Mihomo was already running, it has been switched to LaunchDaemon mode automatically."
+echo "Next step:"
+echo "  mihoctl mode tun"
+echo "  mihoctl on"
     ;;
   *)
     echo "TUN helper is only supported on Linux and macOS." >&2
