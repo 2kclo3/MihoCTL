@@ -75,6 +75,7 @@ func (m *Manager) Add(ctx context.Context, rawURL string) (*AddResult, error) {
 		nameBase = parsed.Host
 	}
 	name := uniqueName(m.cfg.Subscriptions, nameBase)
+	firstSubscription := len(m.cfg.Subscriptions) == 0
 	entry := config.Subscription{
 		Name:       name,
 		URL:        importLink.URL,
@@ -82,10 +83,16 @@ func (m *Manager) Add(ctx context.Context, rawURL string) (*AddResult, error) {
 		UserAgent:  strings.TrimSpace(importLink.UserAgent),
 	}
 	m.cfg.Subscriptions = append(m.cfg.Subscriptions, entry)
+	if firstSubscription {
+		m.cfg.DefaultSubscription = entry.Name
+	}
 
 	result, err := m.UpdateOne(ctx, entry.Name)
 	if err != nil {
 		m.cfg.Subscriptions = removeSubscriptionByName(m.cfg.Subscriptions, entry.Name)
+		if firstSubscription {
+			m.cfg.DefaultSubscription = ""
+		}
 		return nil, err
 	}
 	addResult := &AddResult{
