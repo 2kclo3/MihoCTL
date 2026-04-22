@@ -1,0 +1,70 @@
+package cmd
+
+import (
+	"fmt"
+
+	"github.com/spf13/cobra"
+
+	"mihoctl/internal/app"
+	"mihoctl/internal/mode"
+)
+
+func newOnCommand(application *app.App) *cobra.Command {
+	return &cobra.Command{
+		Use:   "on",
+		Short: application.T("cmd.on.short"),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runModeToggle(cmd, application, true)
+		},
+	}
+}
+
+func newOffCommand(application *app.App) *cobra.Command {
+	return &cobra.Command{
+		Use:   "off",
+		Short: application.T("cmd.off.short"),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runModeToggle(cmd, application, false)
+		},
+	}
+}
+
+func runModeToggle(cmd *cobra.Command, application *app.App, enabled bool) error {
+	manager := mode.NewManager(application.Paths, application.Config, application.State, application.MihomoClient())
+	currentMode := mode.ResolveMode(application.Config.Mode)
+
+	fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.mode.current", map[string]any{
+		"mode": currentMode,
+	}))
+
+	switch currentMode {
+	case mode.ModeEnv:
+		if err := manager.SetSystemProxy(enabled); err != nil {
+			return err
+		}
+		if err := application.SaveState(); err != nil {
+			return err
+		}
+		if enabled {
+			fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.mode.env.on.success"))
+			fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.mode.env.on.hint"))
+			return nil
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.mode.env.off.success"))
+		fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.mode.env.off.hint"))
+		return nil
+	default:
+		if err := manager.SetTun(enabled); err != nil {
+			return err
+		}
+		if err := application.SaveState(); err != nil {
+			return err
+		}
+		if enabled {
+			fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.mode.tun.on.success"))
+			return nil
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.mode.tun.off.success"))
+		return nil
+	}
+}

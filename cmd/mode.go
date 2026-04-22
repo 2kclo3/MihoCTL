@@ -1,0 +1,75 @@
+package cmd
+
+import (
+	"fmt"
+
+	"github.com/spf13/cobra"
+
+	"mihoctl/internal/app"
+	"mihoctl/internal/mode"
+)
+
+func newModeCommand(application *app.App) *cobra.Command {
+	return &cobra.Command{
+		Use:       "mode [env|tun]",
+		Short:     application.T("cmd.mode.short"),
+		Args:      cobra.MaximumNArgs(1),
+		ValidArgs: []string{mode.ModeEnv, mode.ModeTun},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			manager := mode.NewManager(application.Paths, application.Config, application.State, application.MihomoClient())
+			currentMode := mode.ResolveMode(application.Config.Mode)
+			if len(args) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.mode.current", map[string]any{
+					"mode": currentMode,
+				}))
+				return nil
+			}
+
+			nextMode := mode.NormalizeMode(args[0])
+			if nextMode == "" {
+				return fmt.Errorf("unsupported mode: %s", args[0])
+			}
+			if nextMode == currentMode {
+				fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.mode.current", map[string]any{
+					"mode": nextMode,
+				}))
+				return nil
+			}
+
+			wasEnabled, err := manager.ModeEnabled(currentMode)
+			if err != nil {
+				return err
+			}
+			if wasEnabled {
+				if err := manager.ApplyMode(currentMode, false); err != nil {
+					return err
+				}
+			}
+			application.Config.Mode = nextMode
+			if err := application.SaveConfig(); err != nil {
+				return err
+			}
+			if wasEnabled {
+				if err := manager.ApplyMode(nextMode, true); err != nil {
+					return err
+				}
+			}
+			if err := application.SaveState(); err != nil {
+				return err
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.mode.current", map[string]any{
+				"mode": nextMode,
+			}))
+			if wasEnabled {
+				switch nextMode {
+				case mode.ModeEnv:
+					fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.mode.env.on.success"))
+					fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.mode.env.on.hint"))
+				default:
+					fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.mode.tun.on.success"))
+				}
+			}
+			return nil
+		},
+	}
+}
