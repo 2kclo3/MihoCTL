@@ -274,6 +274,7 @@ sudo mihoctl boot off
 说明：
 
 - 开机自启依赖系统级服务，因此通常需要管理员权限
+- `boot on` 和 `boot shell on` 不建议同时开启；如果你启用了系统级开机自启，MihoCTL 会自动关闭登录后自恢复启动
 - 如果你已经开启 `boot on`，删除订阅前需要先执行 `mihoctl boot off`
 
 ## AutoDL 推荐方案
@@ -303,6 +304,7 @@ mihoctl boot shell off
 说明：
 
 - 这套方案会写入 `~/.profile`、`~/.bashrc`、`~/.zshrc`
+- 如果已经开启系统级 `boot on`，需要先执行 `mihoctl boot off`，再开启 `boot shell on`
 - 以后你在 AutoDL 容器里新开终端时，会自动检查 Mihomo 是否已运行
 - 如果 Mihomo 没跑，就会自动执行 `mihoctl start`
 - 这更适合容器环境里的“登录后自动恢复”，不是传统意义上依赖 `systemd` 的系统级开机自启

@@ -36,7 +36,7 @@ func NewManager(cfg *config.Config) *Manager {
 func (m *Manager) Enable() (*Status, error) {
 	switch runtime.GOOS {
 	case "linux":
-		if !linuxSystemdAvailable() {
+		if !LinuxSystemdAvailable() {
 			return nil, core.NewActionError("service_systemd_unavailable", "err.service.systemd_unavailable", nil, "err.service.systemd_unavailable_hint", nil, map[string]any{
 				"command": "mihoctl boot shell on",
 			})
@@ -67,7 +67,7 @@ func (m *Manager) Enable() (*Status, error) {
 func (m *Manager) Disable() error {
 	switch runtime.GOOS {
 	case "linux":
-		if !linuxSystemdAvailable() {
+		if !LinuxSystemdAvailable() {
 			return core.NewActionError("service_systemd_unavailable", "err.service.systemd_unavailable", nil, "err.service.systemd_unavailable_hint", nil, map[string]any{
 				"command": "mihoctl boot shell on",
 			})
@@ -92,7 +92,7 @@ func (m *Manager) Disable() error {
 func (m *Manager) Status() (*Status, error) {
 	switch runtime.GOOS {
 	case "linux":
-		if !linuxSystemdAvailable() {
+		if !LinuxSystemdAvailable() {
 			return nil, core.NewActionError("service_systemd_unavailable", "err.service.systemd_unavailable", nil, "err.service.systemd_unavailable_hint", nil, map[string]any{
 				"command": "mihoctl boot shell on",
 			})
@@ -178,7 +178,7 @@ func runCommand(name string, args ...string) error {
 	return nil
 }
 
-func linuxSystemdAvailable() bool {
+func LinuxSystemdAvailable() bool {
 	if runtime.GOOS != "linux" {
 		return false
 	}

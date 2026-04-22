@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/spf13/cobra"
 
@@ -23,6 +24,24 @@ func newBootCommand(application *app.App) *cobra.Command {
 			Use:   "on",
 			Short: application.T("cmd.boot.on.short"),
 			RunE: func(cmd *cobra.Command, args []string) error {
+				current, err := bootServiceStatus(application)
+				if err != nil {
+					return err
+				}
+				if current != nil && (current.Enabled || current.Registered) {
+					fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.boot.on.already"))
+					if current.Path != "" {
+						fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.boot.status.path", map[string]any{
+							"path": current.Path,
+						}))
+					}
+					if shellStatus, err := bootShellStatus(application); err == nil && shellStatus.Enabled {
+						if _, err := uninstallBootShell(application); err == nil {
+							fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.boot.shell.disabled_by_boot"))
+						}
+					}
+					return nil
+				}
 				if err := requireBootPrivileges(application, "on"); err != nil {
 					return err
 				}
@@ -39,6 +58,11 @@ func newBootCommand(application *app.App) *cobra.Command {
 				fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.boot.on.detail", map[string]any{
 					"path": status.Path,
 				}))
+				if shellStatus, err := bootShellStatus(application); err == nil && shellStatus.Enabled {
+					if _, err := uninstallBootShell(application); err == nil {
+						fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.boot.shell.disabled_by_boot"))
+					}
+				}
 				return nil
 			},
 		},
@@ -46,6 +70,14 @@ func newBootCommand(application *app.App) *cobra.Command {
 			Use:   "off",
 			Short: application.T("cmd.boot.off.short"),
 			RunE: func(cmd *cobra.Command, args []string) error {
+				current, err := bootServiceStatus(application)
+				if err != nil {
+					return err
+				}
+				if current != nil && !current.Enabled && !current.Registered {
+					fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.boot.off.already"))
+					return nil
+				}
 				if err := requireBootPrivileges(application, "off"); err != nil {
 					return err
 				}
@@ -101,4 +133,13 @@ func ensureBootReady(application *app.App) error {
 		}, nil)
 	}
 	return mode.NewManager(application.Paths, application.Config, application.State, application.MihomoClient()).EnsureActiveConfig()
+}
+
+func bootServiceStatus(application *app.App) (*service.Status, error) {
+	if runtime.GOOS == "linux" && !service.LinuxSystemdAvailable() {
+		return nil, core.NewActionError("service_systemd_unavailable", "err.service.systemd_unavailable", nil, "err.service.systemd_unavailable_hint", nil, map[string]any{
+			"command": "mihoctl boot shell on",
+		})
+	}
+	return service.NewManager(application.Config).Status()
 }

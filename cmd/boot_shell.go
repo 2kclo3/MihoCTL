@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"mihoctl/internal/app"
 	"mihoctl/internal/core"
+	"mihoctl/internal/service"
 )
 
 const (
@@ -28,6 +30,22 @@ func newBootShellCommand(application *app.App) *cobra.Command {
 			Use:   "on",
 			Short: application.T("cmd.boot.shell.on.short"),
 			RunE: func(cmd *cobra.Command, args []string) error {
+				if err := ensureBootShellCanEnable(application); err != nil {
+					return err
+				}
+				status, err := bootShellStatus(application)
+				if err != nil {
+					return err
+				}
+				if status.Enabled {
+					fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.boot.shell.on.already"))
+					for _, file := range status.Files {
+						fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.boot.shell.file", map[string]any{
+							"path": displayHomePath(file),
+						}))
+					}
+					return nil
+				}
 				files, err := installBootShell(application)
 				if err != nil {
 					return err
@@ -48,6 +66,14 @@ func newBootShellCommand(application *app.App) *cobra.Command {
 			Use:   "off",
 			Short: application.T("cmd.boot.shell.off.short"),
 			RunE: func(cmd *cobra.Command, args []string) error {
+				status, err := bootShellStatus(application)
+				if err != nil {
+					return err
+				}
+				if !status.Enabled {
+					fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.boot.shell.off.already"))
+					return nil
+				}
 				files, err := uninstallBootShell(application)
 				if err != nil {
 					return err
@@ -151,6 +177,23 @@ func bootShellStatus(application *app.App) (*shellBootStatus, error) {
 		}
 	}
 	return status, nil
+}
+
+func ensureBootShellCanEnable(application *app.App) error {
+	if runtime.GOOS == "linux" && !service.LinuxSystemdAvailable() {
+		return nil
+	}
+
+	status, err := service.NewManager(application.Config).Status()
+	if err != nil {
+		return err
+	}
+	if status.Enabled || status.Registered {
+		return core.NewActionError("boot_shell_conflict", "err.boot.shell.conflict", nil, "err.boot.shell.conflict_hint", nil, map[string]any{
+			"command": "mihoctl boot off",
+		})
+	}
+	return nil
 }
 
 func renderBootShellBlock(application *app.App) string {
