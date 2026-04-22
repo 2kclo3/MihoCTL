@@ -1,174 +1,262 @@
 # MihoCTL
 
-MihoCTL 是一个面向 Linux 与 macOS 无头环境的 Mihomo 命令行管理工具，目标是用单文件 CLI 完成内核安装、生命周期控制、订阅更新、策略切换和模式管理。
+MihoCTL 是一个面向 Linux 和 macOS 的 Mihomo 命令行管理工具。
 
-## 当前已实现
+它更适合这类场景：
 
-- 支持离线首装：优先从随包附带的 `bundled/` 或 `assets/bundled/` 安装基础版 Mihomo 内核与数据库。
-- `mihoctl core install`：从 `MetaCubeX/mihomo` 的 GitHub Release 下载最新 Mihomo 内核并安装到 MihoCTL 自己的 `bin/` 目录。
-- `mihoctl core upgrade`：升级 MihoCTL 管理的 Mihomo 内核。
-- `mihoctl core install --version vX.Y.Z`：安装指定版本的 Mihomo 内核。
-- `mihoctl core upgrade --version vX.Y.Z`：升级或切换到指定版本的 Mihomo 内核。
-- `mihoctl self install`：把 MihoCTL 安装到 PATH 目录中，之后可以直接运行 `mihoctl ...`
-- `mihoctl completion bash|zsh|fish`：生成 shell 自动补全脚本。
-- `mihoctl start|stop|restart|status`
-- `mihoctl sub add|list|use|remove|update`，其中 `sub add` 支持直接粘贴常见的一键导入链接，程序会自动解析出真实订阅地址；订阅下载会优先尝试基于兼容高版本号模板生成的 Clash Verge / FlClash / CFW / v2rayN 请求头形态，并支持 URL 中 `user:pass@host` 的 Basic Auth
-- `mihoctl proxy list|use|check`
-- `mihoctl mode [env|tun]`、`mihoctl on`、`mihoctl off`
-  Linux 无头环境下，`env` 模式会通过受控的 shell 环境变量脚本为新终端注入代理设置；默认模式为 `env`
-- `mihoctl boot on|off|status`
-- `mihoctl config set-lang|view`
+- 你在用服务器、远程主机、无头环境，想用命令行管理代理
+- 你不想手动维护 Mihomo 内核、配置文件、开关模式
+- 你希望用尽量少的命令完成“安装、导入订阅、开启代理、切节点、更新”
 
-## 发布包使用
+MihoCTL 会帮你处理这些事：
 
-如果你拿到的是已经打好的发布包，不需要先装 Go。
+- 安装或升级 Mihomo 内核
+- 添加订阅并下载配置
+- 开启或关闭代理
+- 切换 `env` / `tun` 模式
+- 切换策略组和节点
+- 开机自动启动
+- 基础诊断和状态检查
 
-1. 解压：
+## 快速上手
+
+如果你拿到的是发布包，推荐按这个流程走。
+
+### 1. 安装
 
 ```bash
 tar -xzf mihoctl-linux-amd64.tar.gz
 cd mihoctl-linux-amd64
-```
-
-2. 运行安装脚本：
-
-```bash
 chmod +x ./install.sh
 ./install.sh
 ```
 
-它会自动完成：
+安装脚本会自动完成这些事：
 
-- 安装 `mihoctl` 到合适目录
-- 复制 `bundled/` 到同级目录
-- 执行 `mihoctl core install`
-- 生成 bash、fish、zsh 的补全脚本
+- 安装 `mihoctl`
+- 安装随包附带的基础版 Mihomo 内核和数据库
+- 安装 shell 自动补全
+- 为 bash / zsh 写入 shell 集成，方便直接用 `mihoctl`
 
-3. 查看配置：
+如果安装后当前终端还提示 `mihoctl: command not found`，通常是因为当前 shell 还没刷新 PATH。
 
-```bash
-./mihoctl config view
-```
-
-4. 如需装到 PATH：
-
-```bash
-./mihoctl self install
-```
-
-装好后通常可以直接执行：
-
-```bash
-mihoctl config view
-```
-
-如果当前 shell 里还是提示 `mihoctl: command not found`，这是因为安装脚本无法修改父 shell 的环境变量。当前终端里执行一次：
+先执行一次：
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-如果你用的是 zsh，想让 `mihoctl <Tab>` 补全命令而不是补全当前目录文件名，还需要确保 `~/.zshrc` 里有：
+如果你用的是 bash 或 zsh，重新开一个终端通常就可以直接用了。
+
+### 2. 添加订阅
 
 ```bash
-fpath=("$HOME/.zsh/completions" $fpath)
-autoload -Uz compinit && compinit
+mihoctl sub add https://example.com/your-subscription
 ```
 
-重新打开终端，或执行 `source ~/.zshrc` 后即可生效。
+`sub add` 会立即做三件事：
 
-## 源码方式
+- 保存订阅
+- 立刻下载配置文件
+- 如果这是第一条订阅，自动把它设为当前默认订阅
 
-1. 编译：
+你可以直接粘贴很多机场提供的“一键导入链接”，MihoCTL 会尽量自动解析出真实订阅地址。
+
+### 3. 开启代理
 
 ```bash
-go build -o mihoctl .
+mihoctl on
 ```
 
-2. 首次安装 Mihomo 内核：
+默认模式是 `env`，也就是环境变量模式。
+
+这意味着：
+
+- 当前和新开的终端可以继承代理环境
+- 更适合服务器、SSH、无桌面环境
+- 不需要一上来就折腾 TUN 权限
+
+查看当前状态：
 
 ```bash
-./mihoctl core install
+mihoctl status
 ```
 
-如果你想固定到某个版本：
+关闭代理：
 
 ```bash
-./mihoctl core install --version v1.19.10
+mihoctl off
 ```
 
-如果发行包中已经附带了 `bundled/`，`core install` 会优先使用本地基础内核和数据库，不依赖外网。
+## 最常用的命令
 
-3. 把命令安装到 PATH：
+### 订阅管理
+
+查看订阅：
 
 ```bash
-./mihoctl self install
+mihoctl sub list
 ```
 
-安装成功后，新的终端里通常就可以直接使用：
+切换默认订阅：
 
 ```bash
-mihoctl config view
+mihoctl sub use 2
 ```
 
-4. 查看当前配置：
+更新全部订阅：
 
 ```bash
-./mihoctl config view
+mihoctl sub update
 ```
 
-5. 添加订阅并更新配置：
+删除订阅：
 
 ```bash
-./mihoctl sub add https://example.com/sub.yaml
-./mihoctl sub update
+mihoctl sub remove 2
 ```
 
-`sub add` 会立即尝试下载并保存这份订阅配置，但不会再偷偷指定默认订阅。你可以显式执行：
+### 节点和策略组
+
+查看策略组和节点：
 
 ```bash
-./mihoctl sub use <name|index>
+mihoctl proxy list
 ```
 
-如果当前没有默认订阅，相关命令会直接提示你先选择，而不是自动兜底。
+切换节点：
 
-订阅拉取时会固定使用 `clash-verge/v999.999.999` 作为请求头 User-Agent，对用户透明处理，无需手动配置。
+```bash
+mihoctl proxy use 12
+```
 
-6. 如果你需要 `tun` 模式，先执行一次：
+或者指定“策略组 + 节点”：
+
+```bash
+mihoctl proxy use 2 18
+```
+
+测速：
+
+```bash
+mihoctl proxy check
+```
+
+### 模式切换
+
+查看当前模式：
+
+```bash
+mihoctl mode
+```
+
+切到环境变量模式：
+
+```bash
+mihoctl mode env
+```
+
+切到 TUN 模式：
+
+```bash
+mihoctl mode tun
+```
+
+说明：
+
+- `mode` 只负责切换“以后用哪种方式代理”
+- `on` / `off` 负责真正开启或关闭当前模式
+- 如果切换失败，MihoCTL 不会把状态修改成功
+
+### 一键更新
+
+更新订阅和内核：
+
+```bash
+mihoctl update
+```
+
+只更新订阅：
+
+```bash
+mihoctl update sub
+```
+
+只更新内核：
+
+```bash
+mihoctl update core
+```
+
+### 诊断
+
+```bash
+mihoctl doctor
+```
+
+适合用在这些时候：
+
+- 不确定内核有没有装好
+- 不确定配置文件是否存在
+- 不确定 Controller API 是否可达
+- 不确定当前到底是 `env` 还是 `tun`
+
+## `env` 和 `tun` 怎么选
+
+### `env`
+
+推荐先从 `env` 开始。
+
+优点：
+
+- 对服务器最友好
+- 配置简单
+- 权限要求低
+- 出问题时容易恢复
+
+适合：
+
+- SSH 远程主机
+- 无头 Linux
+- 主要在终端里使用代理
+
+### `tun`
+
+`tun` 更像“全局接管流量”，但它需要额外权限。
+
+适合：
+
+- 你明确知道自己需要 TUN
+- 机器具备对应权限
+- 你愿意按提示执行一次管理员授权
+
+如果要启用 TUN，先执行一次：
 
 ```bash
 sudo mihoctl-enable-tun
 ```
 
-完成后再切换：
+然后再执行：
 
 ```bash
-./mihoctl mode tun
-./mihoctl on
+mihoctl mode tun
+mihoctl on
 ```
 
-如果之后不再需要 TUN，可以执行：
+如果以后不想保留 TUN 授权或相关支持，可以执行：
 
 ```bash
 sudo mihoctl-disable-tun
 ```
 
-7. 如果你只是想开始使用，直接执行：
+## 开机自动启动
+
+先确认订阅已经可用、`mihoctl on` 能正常工作，再开启开机自启。
+
+开启：
 
 ```bash
-./mihoctl on
-```
-
-如果你明确想用隐藏的后台启动命令，也可以执行：
-
-```bash
-./mihoctl start
-```
-
-8. 如果你希望重启后自动运行 Mihomo，直接执行：
-
-```bash
-sudo /你的/mihoctl/完整路径 --config /你的/mihoctl/config.json boot on
+sudo mihoctl boot on
 ```
 
 查看状态：
@@ -177,38 +265,111 @@ sudo /你的/mihoctl/完整路径 --config /你的/mihoctl/config.json boot on
 mihoctl boot status
 ```
 
-关闭开机自动启动：
+关闭：
 
 ```bash
-sudo /你的/mihoctl/完整路径 --config /你的/mihoctl/config.json boot off
+sudo mihoctl boot off
 ```
 
-9. 如果你需要卸载，优先在已启用 MihoCTL shell 集成的终端里执行：
+说明：
+
+- 开机自启依赖系统级服务，因此通常需要管理员权限
+- 如果你已经开启 `boot on`，删除订阅前需要先执行 `mihoctl boot off`
+
+## 常见问题
+
+### 1. 为什么 `mihoctl on` 后当前终端没有立刻生效
+
+如果你是用发布包安装，并且使用 bash / zsh，安装脚本通常已经帮你接好了 shell 集成。
+
+如果当前终端还是没同步，可以执行一次：
+
+```bash
+source ~/.zshrc
+```
+
+或者：
+
+```bash
+source ~/.bashrc
+```
+
+重新开一个终端也可以。
+
+### 2. 为什么 `mihoctl proxy list` 提示 Controller API 连不上
+
+这通常表示 Mihomo 还没启动成功，或者配置文件还没准备好。
+
+建议按顺序检查：
+
+1. 先确认已经添加过订阅：`mihoctl sub list`
+2. 再看状态：`mihoctl status`
+3. 最后做诊断：`mihoctl doctor`
+
+### 3. 为什么 TUN 开不了
+
+通常是这几类原因：
+
+- 没有管理员权限
+- Mihomo 二进制还没获得 TUN 所需能力
+- 当前系统或内核不支持
+
+优先按提示执行一次：
+
+```bash
+sudo mihoctl-enable-tun
+```
+
+如果仍然失败，再看日志：
+
+- Linux: `~/.config/mihoctl/logs/mihomo.log`
+- macOS: `~/Library/Application Support/mihoctl/logs/mihomo.log`
+
+## 卸载
+
+优先使用：
 
 ```bash
 mihoctl self uninstall --yes
 ```
 
-这样除了删除安装文件和 shell 集成，还会顺手清掉当前终端里的 MihoCTL 代理环境变量。
-
-如果当前终端还找不到 `mihoctl`，再退回到发行包里的卸载脚本：
+如果当前环境里已经找不到 `mihoctl`，再使用发布包里的：
 
 ```bash
 ./uninstall.sh
 ```
 
-## 说明
+## 从源码编译
 
-- 默认会把 Mihomo 二进制安装到 MihoCTL 配置目录下的 `bin/mihomo`。
-- 默认会把 bundled 数据库文件复制到 `core.database_dir`，默认即 Mihomo 的工作目录。
-- 如果命令运行在交互终端中，且检测到 Mihomo 有新版本，MihoCTL 会在合适时机提示是否升级。
-- 语言优先级为：命令参数 `--lang` > 环境变量 `MIHOCTL_LANG` > 配置文件 > 默认值。
-- `mihomo` 是内核本体，`mihoctl` 才是管理命令；如果运行成 `mihomo sub list`，看到的是 Mihomo 自己的行为，不是 MihoCTL。
-- 本仓库当前只做了构建校验，没有在这台机器上执行真实 Mihomo 联调、系统代理切换或服务注册测试。
+如果你是自己开发或想本地编译：
+
+```bash
+go build -o mihoctl .
+```
+
+编译后可以直接运行：
+
+```bash
+./mihoctl sub add https://example.com/your-subscription
+./mihoctl on
+```
+
+如果想安装到 PATH：
+
+```bash
+./mihoctl self install
+```
+
+## 额外说明
+
+- MihoCTL 默认把配置放在用户目录下，而不是写进项目目录
+- 默认代理模式是 `env`
+- 订阅下载会自动使用兼容性较强的请求头，对用户透明
+- 如果发布包内带有 `bundled/`，首次安装即使暂时访问不了 GitHub，也可以先用内置基础内核启动
 
 ## 打包发布
 
-直接生成 Linux amd64 发布包：
+生成 Linux amd64 发布包：
 
 ```bash
 make package-linux-amd64
