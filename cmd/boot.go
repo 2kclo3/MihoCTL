@@ -79,7 +79,7 @@ func newBootCommand(application *app.App) *cobra.Command {
 				return nil
 			},
 		},
-		newBootTmuxCommand(application),
+		newBootShellCommand(application),
 	)
 
 	return bootCmd

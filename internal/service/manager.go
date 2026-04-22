@@ -37,7 +37,9 @@ func (m *Manager) Enable() (*Status, error) {
 	switch runtime.GOOS {
 	case "linux":
 		if !linuxSystemdAvailable() {
-			return nil, core.NewActionError("service_systemd_unavailable", "err.service.systemd_unavailable", nil, "", nil, nil)
+			return nil, core.NewActionError("service_systemd_unavailable", "err.service.systemd_unavailable", nil, "err.service.systemd_unavailable_hint", nil, map[string]any{
+				"command": "mihoctl boot shell on",
+			})
 		}
 		if err := os.WriteFile(systemdUnitPath, []byte(m.systemdUnit()), 0o644); err != nil {
 			return nil, core.NewActionError("service_enable_failed", "err.service.enable", err, "", nil, nil)
@@ -66,7 +68,9 @@ func (m *Manager) Disable() error {
 	switch runtime.GOOS {
 	case "linux":
 		if !linuxSystemdAvailable() {
-			return core.NewActionError("service_systemd_unavailable", "err.service.systemd_unavailable", nil, "", nil, nil)
+			return core.NewActionError("service_systemd_unavailable", "err.service.systemd_unavailable", nil, "err.service.systemd_unavailable_hint", nil, map[string]any{
+				"command": "mihoctl boot shell on",
+			})
 		}
 		_ = runCommand("systemctl", "disable", "--now", "mihomo")
 		if err := os.Remove(systemdUnitPath); err != nil && !os.IsNotExist(err) {
@@ -89,7 +93,9 @@ func (m *Manager) Status() (*Status, error) {
 	switch runtime.GOOS {
 	case "linux":
 		if !linuxSystemdAvailable() {
-			return nil, core.NewActionError("service_systemd_unavailable", "err.service.systemd_unavailable", nil, "", nil, nil)
+			return nil, core.NewActionError("service_systemd_unavailable", "err.service.systemd_unavailable", nil, "err.service.systemd_unavailable_hint", nil, map[string]any{
+				"command": "mihoctl boot shell on",
+			})
 		}
 		status := &Status{Path: systemdUnitPath}
 		if _, err := os.Stat(systemdUnitPath); err == nil {

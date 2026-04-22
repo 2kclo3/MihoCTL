@@ -280,51 +280,31 @@ sudo mihoctl boot off
 
 如果你用的是 AutoDL 这类 Docker 容器环境，没有 `systemd`，也不适合走传统的系统级开机自启。
 
-这种场景下，作者更推荐用 `tmux` 做“登录后自动恢复启动”。
+这种场景下，作者更推荐用 MihoCTL 自带的“登录后自恢复启动”。
 
-先安装 `tmux`：
-
-Ubuntu / Debian:
+执行一条命令，把自动恢复逻辑写进你的 shell 配置文件：
 
 ```bash
-apt update && apt install -y tmux
-```
-
-CentOS / RHEL:
-
-```bash
-yum install -y tmux
-```
-
-macOS:
-
-```bash
-brew install tmux
-```
-
-然后执行一条命令，把自恢复启动逻辑写进你的 shell 配置文件：
-
-```bash
-mihoctl boot tmux on
+mihoctl boot shell on
 ```
 
 查看状态：
 
 ```bash
-mihoctl boot tmux status
+mihoctl boot shell status
 ```
 
 关闭这套逻辑：
 
 ```bash
-mihoctl boot tmux off
+mihoctl boot shell off
 ```
 
 说明：
 
 - 这套方案会写入 `~/.profile`、`~/.bashrc`、`~/.zshrc`
 - 以后你在 AutoDL 容器里新开终端时，会自动检查 Mihomo 是否已运行
-- 如果 Mihomo 没跑，且 `mihoctl-autostart` 这个 tmux 会话也不存在，就会自动创建一个后台 tmux 会话并执行 `mihoctl start`
+- 如果 Mihomo 没跑，就会自动执行 `mihoctl start`
 - 这更适合容器环境里的“登录后自动恢复”，不是传统意义上依赖 `systemd` 的系统级开机自启
 
 ## 常见问题
