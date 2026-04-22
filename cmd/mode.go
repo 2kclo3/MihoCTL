@@ -18,6 +18,8 @@ func newModeCommand(application *app.App) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			manager := mode.NewManager(application.Paths, application.Config, application.State, application.MihomoClient())
 			currentMode := mode.ResolveMode(application.Config.Mode)
+			previousConfig := snapshotConfig(application)
+			previousState := snapshotState(application)
 			if len(args) == 0 {
 				fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.mode.current", map[string]any{
 					"mode": currentMode,
@@ -46,15 +48,22 @@ func newModeCommand(application *app.App) *cobra.Command {
 				}
 			}
 			application.Config.Mode = nextMode
-			if err := application.SaveConfig(); err != nil {
-				return err
-			}
 			if wasEnabled {
+				if err := ensureMihomoRuntimeReady(cmd, application); err != nil {
+					rollbackModeSwitch(application, currentMode, nextMode, wasEnabled, previousConfig, previousState)
+					return err
+				}
 				if err := manager.ApplyMode(nextMode, true); err != nil {
+					rollbackModeSwitch(application, currentMode, nextMode, wasEnabled, previousConfig, previousState)
 					return err
 				}
 			}
+			if err := application.SaveConfig(); err != nil {
+				rollbackModeSwitch(application, currentMode, nextMode, wasEnabled, previousConfig, previousState)
+				return err
+			}
 			if err := application.SaveState(); err != nil {
+				rollbackModeSwitch(application, currentMode, nextMode, wasEnabled, previousConfig, previousState)
 				return err
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.mode.current", map[string]any{

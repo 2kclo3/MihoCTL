@@ -42,11 +42,6 @@ func newSubscriptionCommand(application *app.App) *cobra.Command {
 						"url":  addResult.Entry.URL,
 					}))
 				}
-				if addResult.DetectedUserAgent != "" {
-					fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.sub.add.user_agent", map[string]any{
-						"user_agent": addResult.DetectedUserAgent,
-					}))
-				}
 				fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.sub.add.success", map[string]any{
 					"name": addResult.Entry.Name,
 					"url":  addResult.Entry.URL,
@@ -63,8 +58,9 @@ func newSubscriptionCommand(application *app.App) *cobra.Command {
 			},
 		},
 		&cobra.Command{
-			Use:   "list",
-			Short: application.T("cmd.sub.list.short"),
+			Use:     "list",
+			Aliases: []string{"ls"},
+			Short:   application.T("cmd.sub.list.short"),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				manager := subscriptionManagerFromCmd(application, cmd)
 				entries := manager.List()
@@ -74,13 +70,7 @@ func newSubscriptionCommand(application *app.App) *cobra.Command {
 				}
 				for i, entry := range entries {
 					entry = normalizeEntry(entry, application.Paths.SubDir)
-					fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.sub.list.item", map[string]any{
-						"index":   i + 1,
-						"name":    entry.Name,
-						"url":     entry.URL,
-						"path":    entry.ConfigPath,
-						"default": defaultMark(entry.Name == application.Config.DefaultSubscription || entry.URL == application.Config.DefaultSubscription, application),
-					}))
+					renderSubscriptionEntry(cmd, application, i, entry, entry.Name == application.Config.DefaultSubscription || entry.URL == application.Config.DefaultSubscription)
 				}
 				if application.Config.DefaultSubscription == "" {
 					fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.sub.list.no_default"))
@@ -177,45 +167,6 @@ func newSubscriptionCommand(application *app.App) *cobra.Command {
 				return nil
 			},
 		},
-		&cobra.Command{
-			Use:   "set-ua <name|url|index> <user-agent>",
-			Short: application.T("cmd.sub.setua.short"),
-			Args:  cobra.ExactArgs(2),
-			RunE: func(cmd *cobra.Command, args []string) error {
-				manager := subscriptionManagerFromCmd(application, cmd)
-				entry, err := manager.SetUserAgent(args[0], args[1])
-				if err != nil {
-					return err
-				}
-				if err := application.SaveConfig(); err != nil {
-					return err
-				}
-				fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.sub.ua.set", map[string]any{
-					"name":       entry.Name,
-					"user_agent": entry.UserAgent,
-				}))
-				return nil
-			},
-		},
-		&cobra.Command{
-			Use:   "clear-ua <name|url|index>",
-			Short: application.T("cmd.sub.clearua.short"),
-			Args:  cobra.ExactArgs(1),
-			RunE: func(cmd *cobra.Command, args []string) error {
-				manager := subscriptionManagerFromCmd(application, cmd)
-				entry, err := manager.ClearUserAgent(args[0])
-				if err != nil {
-					return err
-				}
-				if err := application.SaveConfig(); err != nil {
-					return err
-				}
-				fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.sub.ua.clear", map[string]any{
-					"name": entry.Name,
-				}))
-				return nil
-			},
-		},
 	)
 
 	return subCmd
@@ -230,6 +181,25 @@ func defaultMark(isDefault bool, application *app.App) string {
 		return application.T("label.default")
 	}
 	return ""
+}
+
+func renderSubscriptionEntry(cmd *cobra.Command, application *app.App, index int, entry config.Subscription, isDefault bool) {
+	width := terminalWidth(cmd.OutOrStdout())
+	title := application.Tf("msg.sub.list.title", map[string]any{
+		"index": index + 1,
+		"name":  entry.Name,
+	})
+	if isDefault {
+		title += " " + application.T("label.default")
+	}
+	renderProxyBlockHeader(cmd, width, title)
+	fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.sub.list.url", map[string]any{
+		"url": entry.URL,
+	}))
+	fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.sub.list.path", map[string]any{
+		"path": entry.ConfigPath,
+	}))
+	renderProxyBlockFooter(cmd, width)
 }
 
 func normalizeEntry(entry config.Subscription, subDir string) config.Subscription {

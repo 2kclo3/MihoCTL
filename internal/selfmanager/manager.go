@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -69,7 +70,11 @@ func (m *Manager) Install(targetDir string) (*InstallResult, error) {
 func (m *Manager) Uninstall(cfg *config.Config) (*UninstallResult, error) {
 	result := &UninstallResult{}
 
+	stopMihomoRuntime(result, cfg)
+
 	removeFile(result, m.paths.ExecPath)
+	removeFile(result, filepath.Join(m.paths.ExecDir, "mihoctl-enable-tun"))
+	removeFile(result, filepath.Join(m.paths.ExecDir, "mihoctl-disable-tun"))
 	removeDir(result, filepath.Join(m.paths.ExecDir, "bundled"))
 
 	home, _ := os.UserHomeDir()
@@ -248,5 +253,46 @@ func removeServiceArtifacts(result *UninstallResult) {
 		removeFile(result, "/etc/systemd/system/mihomo.service")
 	case "darwin":
 		removeFile(result, "/Library/LaunchDaemons/com.mihoctl.mihomo.plist")
+	}
+}
+
+func stopMihomoRuntime(result *UninstallResult, cfg *config.Config) {
+	switch runtime.GOOS {
+	case "linux":
+		runCleanupCommand(result, "systemctl", "disable", "--now", "mihomo")
+		runCleanupCommand(result, "systemctl", "daemon-reload")
+	case "darwin":
+		runCleanupCommand(result, "launchctl", "bootout", "system", "/Library/LaunchDaemons/com.mihoctl.mihomo.plist")
+	}
+
+	// 卸载时尽量清掉残留 Mihomo 进程，避免文件删掉后代理还在继续跑。
+	runCleanupCommand(result, "pkill", "-x", "mihomo")
+	if cfg != nil && strings.TrimSpace(cfg.Mihomo.BinaryPath) != "" {
+		runCleanupCommand(result, "pkill", "-f", cfg.Mihomo.BinaryPath)
+	}
+}
+
+func runCleanupCommand(result *UninstallResult, name string, args ...string) {
+	cmd := exec.Command(name, args...)
+	if err := cmd.Run(); err != nil {
+		if isIgnorableCleanupError(err) {
+			return
+		}
+		result.Warnings = append(result.Warnings, fmt.Sprintf("%s %s: %v", name, strings.Join(args, " "), err))
+		return
+	}
+	result.Removed = append(result.Removed, fmt.Sprintf("%s %s", name, strings.Join(args, " ")))
+}
+
+func isIgnorableCleanupError(err error) bool {
+	exitErr, ok := err.(*exec.ExitError)
+	if !ok {
+		return false
+	}
+	switch exitErr.ExitCode() {
+	case 1, 5:
+		return true
+	default:
+		return false
 	}
 }

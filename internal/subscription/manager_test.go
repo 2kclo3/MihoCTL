@@ -17,7 +17,7 @@ func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
 }
 
-func TestFetchSubscriptionRetriesWithClientUserAgent(t *testing.T) {
+func TestFetchSubscriptionUsesFixedClashVergeUserAgent(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{
@@ -29,7 +29,7 @@ func TestFetchSubscriptionRetriesWithClientUserAgent(t *testing.T) {
 		},
 	}
 	manager := NewManager(cfg, config.Paths{}, mihomo.NewClient("http://127.0.0.1:9090", ""), io.Discard, "")
-	wantUA := buildClashVergeCompatibleUserAgent()
+	wantUA := subscriptionUserAgent
 	client := &http.Client{
 		Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
 			if req.UserAgent() != wantUA {
@@ -54,21 +54,11 @@ func TestFetchSubscriptionRetriesWithClientUserAgent(t *testing.T) {
 		t.Fatalf("NewRequestWithContext error = %v", err)
 	}
 
-	result, err := manager.fetchSubscription(context.Background(), client, req, cfg.Subscriptions[0])
+	result, err := manager.fetchSubscription(context.Background(), client, req)
 	if err != nil {
 		t.Fatalf("fetchSubscription returned error: %v", err)
 	}
 	defer result.response.Body.Close()
-
-	if result.userAgent != wantUA {
-		t.Fatalf("result.userAgent = %q, want %q", result.userAgent, wantUA)
-	}
-
-	cfg.Subscriptions[0].UserAgent = result.userAgent
-	manager.updateSubscriptionMeta(cfg.Subscriptions[0])
-	if cfg.Subscriptions[0].UserAgent != wantUA {
-		t.Fatalf("stored user agent = %q, want %q", cfg.Subscriptions[0].UserAgent, wantUA)
-	}
 }
 
 func TestApplySubscriptionHeadersUsesBasicAuthFromURL(t *testing.T) {
@@ -79,38 +69,13 @@ func TestApplySubscriptionHeadersUsesBasicAuthFromURL(t *testing.T) {
 		t.Fatalf("NewRequest error = %v", err)
 	}
 
-	applySubscriptionHeaders(req, buildFlClashCompatibleUserAgent())
+	applySubscriptionHeaders(req, subscriptionUserAgent)
 
 	if got := req.Header.Get("Authorization"); got != "Basic ZGVtbzpzZWNyZXQ=" {
 		t.Fatalf("Authorization = %q, want %q", got, "Basic ZGVtbzpzZWNyZXQ=")
 	}
-	if got := req.Header.Get("User-Agent"); got != buildFlClashCompatibleUserAgent() {
-		t.Fatalf("User-Agent = %q, want %q", got, buildFlClashCompatibleUserAgent())
-	}
-}
-
-func TestSetUserAgent(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{
-		Subscriptions: []config.Subscription{
-			{
-				Name: "demo",
-				URL:  "https://example.com/sub.yaml",
-			},
-		},
-	}
-	manager := NewManager(cfg, config.Paths{}, mihomo.NewClient("http://127.0.0.1:9090", ""), io.Discard, "")
-
-	entry, err := manager.SetUserAgent("demo", "custom-agent/1.0")
-	if err != nil {
-		t.Fatalf("SetUserAgent returned error: %v", err)
-	}
-	if entry.UserAgent != "custom-agent/1.0" {
-		t.Fatalf("entry.UserAgent = %q, want %q", entry.UserAgent, "custom-agent/1.0")
-	}
-	if cfg.Subscriptions[0].UserAgent != "custom-agent/1.0" {
-		t.Fatalf("stored user agent = %q, want %q", cfg.Subscriptions[0].UserAgent, "custom-agent/1.0")
+	if got := req.Header.Get("User-Agent"); got != subscriptionUserAgent {
+		t.Fatalf("User-Agent = %q, want %q", got, subscriptionUserAgent)
 	}
 }
 

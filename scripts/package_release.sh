@@ -32,8 +32,12 @@ cp "${ROOT_DIR}/README.md" "${DIST_DIR}/README.md"
 cp "${ROOT_DIR}/assets/bundled/README.md" "${DIST_DIR}/BUNDLED.md"
 cp "${ROOT_DIR}/scripts/release_install.sh" "${DIST_DIR}/install.sh"
 cp "${ROOT_DIR}/scripts/release_uninstall.sh" "${DIST_DIR}/uninstall.sh"
+cp "${ROOT_DIR}/scripts/release_enable_tun.sh" "${DIST_DIR}/mihoctl-enable-tun"
+cp "${ROOT_DIR}/scripts/release_disable_tun.sh" "${DIST_DIR}/mihoctl-disable-tun"
 chmod 755 "${DIST_DIR}/install.sh"
 chmod 755 "${DIST_DIR}/uninstall.sh"
+chmod 755 "${DIST_DIR}/mihoctl-enable-tun"
+chmod 755 "${DIST_DIR}/mihoctl-disable-tun"
 
 cat > "${DIST_DIR}/USE.md" <<'EOF'
 # MihoCTL 测试使用说明
@@ -79,14 +83,33 @@ chmod +x ./mihoctl
 ./mihoctl sub update
 ```
 
-## 6. 启动 Mihomo
+## 6. 启用 TUN 能力（可选）
+
+```bash
+sudo ./mihoctl-enable-tun
+```
+
+授权完成后再执行：
+
+```bash
+./mihoctl mode tun
+./mihoctl on
+```
+
+如果之后不再需要 TUN，可以执行：
+
+```bash
+sudo ./mihoctl-disable-tun
+```
+
+## 7. 启动 Mihomo
 
 ```bash
 ./mihoctl start
 ./mihoctl status
 ```
 
-## 7. 安装到 PATH
+## 8. 安装到 PATH
 
 ```bash
 ./mihoctl self install

@@ -31,6 +31,10 @@ func NewManager(paths config.Paths, cfg *config.Config, st *state.State, client 
 	return &Manager{paths: paths, cfg: cfg, state: st, client: client}
 }
 
+func (m *Manager) EnsureActiveConfig() error {
+	return m.ensureActiveConfig()
+}
+
 func (m *Manager) SetTun(enabled bool) error {
 	if err := m.ensureActiveConfig(); err != nil {
 		if !enabled && isConfigMissingError(err) {
@@ -68,9 +72,7 @@ func (m *Manager) SetTun(enabled bool) error {
 		return core.NewActionError("set_tun_not_applied", "err.mode.set_tun_not_applied", fmt.Errorf("requested=%t actual=%t", enabled, actual.Tun.Enable), "err.mode.tun_permission", map[string]any{
 			"expected": enabled,
 			"actual":   actual.Tun.Enable,
-		}, map[string]any{
-			"log": m.fallbackLogPath(),
-		})
+		}, m.tunPermissionHintData())
 	}
 
 	m.recordToggle(&m.state.Modes.TUN, enabled, "config+api", "")
@@ -94,9 +96,7 @@ func (m *Manager) setTunRuntimeOnly(enabled bool) error {
 		return core.NewActionError("set_tun_not_applied", "err.mode.set_tun_not_applied", fmt.Errorf("requested=%t actual=%t", enabled, actual.Tun.Enable), "err.mode.tun_permission", map[string]any{
 			"expected": enabled,
 			"actual":   actual.Tun.Enable,
-		}, map[string]any{
-			"log": m.fallbackLogPath(),
-		})
+		}, m.tunPermissionHintData())
 	}
 
 	m.recordToggle(&m.state.Modes.TUN, enabled, "api", "")
@@ -375,6 +375,89 @@ func (m *Manager) fallbackLogPath() string {
 		return m.state.Process.LogFile
 	}
 	return m.paths.LogFile
+}
+
+func (m *Manager) tunPermissionHintData() map[string]any {
+	binary := strings.TrimSpace(m.cfg.Mihomo.BinaryPath)
+	if binary == "" {
+		binary = "mihomo"
+	}
+	helperPath := filepath.Join(strings.TrimSpace(m.paths.ExecDir), "mihoctl-enable-tun")
+
+	return map[string]any{
+		"log":   m.fallbackLogPath(),
+		"steps": m.tunPermissionSteps(binary, helperPath),
+	}
+}
+
+func (m *Manager) tunPermissionSteps(binaryPath, helperPath string) string {
+	binaryPath = shellQuote(binaryPath)
+	logPath := shellQuote(m.fallbackLogPath())
+	helperExists := helperPath != "" && fileExists(helperPath)
+	if helperExists {
+		helperPath = shellQuote(helperPath)
+	}
+
+	if strings.EqualFold(strings.TrimSpace(m.cfg.Language), "en-US") {
+		if helperExists && (runtime.GOOS == "linux" || runtime.GOOS == "darwin") {
+			return fmt.Sprintf(
+				"Run `sudo %s` once, then rerun `mihoctl on`; if TUN still does not work, inspect the log %s",
+				helperPath,
+				logPath,
+			)
+		}
+		switch runtime.GOOS {
+		case "linux":
+			return fmt.Sprintf(
+				"Run `sudo setcap cap_net_admin,cap_net_raw+ep %s` once, then rerun `mihoctl on`; if TUN still does not work, inspect the log %s",
+				binaryPath,
+				logPath,
+			)
+		case "darwin":
+			return fmt.Sprintf("Restart Mihomo with administrator privileges, then rerun `mihoctl on`; if TUN still does not work, inspect the log %s", logPath)
+		default:
+			return fmt.Sprintf("Restart Mihomo with administrator privileges, then inspect the log %s", logPath)
+		}
+	}
+
+	if helperExists && (runtime.GOOS == "linux" || runtime.GOOS == "darwin") {
+		return fmt.Sprintf(
+			"请先执行一次 `sudo %s`，然后重新执行 `mihoctl on`；如果仍然失败，再查看日志 `%s`",
+			helperPath,
+			logPath,
+		)
+	}
+
+	switch runtime.GOOS {
+	case "linux":
+		return fmt.Sprintf(
+			"请先执行一次 `sudo setcap cap_net_admin,cap_net_raw+ep %s`，然后重新执行 `mihoctl on`；如果仍然失败，再查看日志 `%s`",
+			binaryPath,
+			logPath,
+		)
+	case "darwin":
+		return fmt.Sprintf(
+			"请用管理员重新启动 Mihomo，然后重新执行 `mihoctl on`；如果仍然失败，再查看日志 `%s`",
+			logPath,
+		)
+	default:
+		return fmt.Sprintf("请用管理员权限重新启动 Mihomo，并查看日志 `%s`", logPath)
+	}
+}
+
+func fileExists(path string) bool {
+	if strings.TrimSpace(path) == "" {
+		return false
+	}
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func shellQuote(value string) string {
+	if value == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
 
 func isConfigMissingError(err error) bool {

@@ -32,17 +32,30 @@ func newOffCommand(application *app.App) *cobra.Command {
 func runModeToggle(cmd *cobra.Command, application *app.App, enabled bool) error {
 	manager := mode.NewManager(application.Paths, application.Config, application.State, application.MihomoClient())
 	currentMode := mode.ResolveMode(application.Config.Mode)
+	previousState := snapshotState(application)
+	previousEnabled, err := manager.ModeEnabled(currentMode)
+	if err != nil {
+		previousEnabled = false
+	}
 
 	fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.mode.current", map[string]any{
 		"mode": currentMode,
 	}))
 
+	if enabled {
+		if err := ensureMihomoRuntimeReady(cmd, application); err != nil {
+			return err
+		}
+	}
+
 	switch currentMode {
 	case mode.ModeEnv:
 		if err := manager.SetSystemProxy(enabled); err != nil {
+			rollbackModeToggle(application, currentMode, previousEnabled, previousState)
 			return err
 		}
 		if err := application.SaveState(); err != nil {
+			rollbackModeToggle(application, currentMode, previousEnabled, previousState)
 			return err
 		}
 		if enabled {
@@ -55,9 +68,11 @@ func runModeToggle(cmd *cobra.Command, application *app.App, enabled bool) error
 		return nil
 	default:
 		if err := manager.SetTun(enabled); err != nil {
+			rollbackModeToggle(application, currentMode, previousEnabled, previousState)
 			return err
 		}
 		if err := application.SaveState(); err != nil {
+			rollbackModeToggle(application, currentMode, previousEnabled, previousState)
 			return err
 		}
 		if enabled {

@@ -9,9 +9,11 @@ const (
 
 func NormalizeMode(value string) string {
 	switch strings.TrimSpace(strings.ToLower(value)) {
+	case "":
+		return ModeEnv
 	case ModeEnv:
 		return ModeEnv
-	case "", ModeTun:
+	case ModeTun:
 		return ModeTun
 	default:
 		return ""
@@ -21,7 +23,7 @@ func NormalizeMode(value string) string {
 func ResolveMode(value string) string {
 	normalized := NormalizeMode(value)
 	if normalized == "" {
-		return ModeTun
+		return ModeEnv
 	}
 	return normalized
 }

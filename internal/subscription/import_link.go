@@ -10,11 +10,10 @@ import (
 var embeddedHTTPURLPattern = regexp.MustCompile(`https?://[^\s"'<>]+`)
 
 type ImportLink struct {
-	Original  string
-	URL       string
-	Name      string
-	UserAgent string
-	Wrapped   bool
+	Original string
+	URL      string
+	Name     string
+	Wrapped  bool
 }
 
 func ResolveImportLink(raw string) (ImportLink, error) {
@@ -35,11 +34,10 @@ func ResolveImportLink(raw string) (ImportLink, error) {
 	for _, candidate := range candidates {
 		if resolved, ok := resolveEmbeddedHTTPURL(candidate, 0); ok {
 			return ImportLink{
-				Original:  trimmed,
-				URL:       resolved,
-				UserAgent: extractImportUserAgent(parsed),
-				Name:      extractImportName(parsed),
-				Wrapped:   true,
+				Original: trimmed,
+				URL:      resolved,
+				Name:     extractImportName(parsed),
+				Wrapped:  true,
 			}, nil
 		}
 	}
@@ -53,20 +51,6 @@ func extractImportName(parsed *url.URL) string {
 
 	query := parsed.Query()
 	for _, key := range []string{"name", "title", "profile_name", "profile", "tag"} {
-		if value := strings.TrimSpace(query.Get(key)); value != "" {
-			return value
-		}
-	}
-	return ""
-}
-
-func extractImportUserAgent(parsed *url.URL) string {
-	if parsed == nil {
-		return ""
-	}
-
-	query := parsed.Query()
-	for _, key := range []string{"user-agent", "user_agent", "ua", "agent"} {
 		if value := strings.TrimSpace(query.Get(key)); value != "" {
 			return value
 		}

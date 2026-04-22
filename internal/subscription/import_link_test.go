@@ -10,7 +10,6 @@ func TestResolveImportLink(t *testing.T) {
 		raw       string
 		wantURL   string
 		wantName  string
-		wantUA    string
 		wrapped   bool
 		shouldErr bool
 	}{
@@ -26,7 +25,6 @@ func TestResolveImportLink(t *testing.T) {
 			raw:      "clash://install-config?url=https%3A%2F%2Fexample.com%2Fsub.yaml%3Ftoken%3Dabc&name=MyNode&ua=FlClash",
 			wantURL:  "https://example.com/sub.yaml?token=abc",
 			wantName: "MyNode",
-			wantUA:   "FlClash",
 			wrapped:  true,
 		},
 		{
@@ -70,9 +68,6 @@ func TestResolveImportLink(t *testing.T) {
 			}
 			if result.Name != tc.wantName {
 				t.Fatalf("ResolveImportLink(%q) Name = %q, want %q", tc.raw, result.Name, tc.wantName)
-			}
-			if result.UserAgent != tc.wantUA {
-				t.Fatalf("ResolveImportLink(%q) UserAgent = %q, want %q", tc.raw, result.UserAgent, tc.wantUA)
 			}
 			if result.Wrapped != tc.wrapped {
 				t.Fatalf("ResolveImportLink(%q) Wrapped = %v, want %v", tc.raw, result.Wrapped, tc.wrapped)

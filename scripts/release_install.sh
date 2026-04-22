@@ -21,6 +21,8 @@ choose_target_dir() {
 
 TARGET_DIR="$(choose_target_dir)"
 INSTALL_BIN="${TARGET_DIR}/mihoctl"
+INSTALL_TUN_HELPER="${TARGET_DIR}/mihoctl-enable-tun"
+UNINSTALL_TUN_HELPER="${TARGET_DIR}/mihoctl-disable-tun"
 INSTALL_BUNDLED_DIR="${TARGET_DIR}/bundled"
 BASH_COMPLETION_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/bash-completion/completions"
 FISH_COMPLETION_DIR="${HOME}/.config/fish/completions"
@@ -59,17 +61,15 @@ mihoctl() {
 
   "\${_mihoctl_bin}" "\$@"
   local _mihoctl_status=\$?
-  if [[ \${_mihoctl_status} -eq 0 ]]; then
-    case "\${1-}" in
-      on|off|mode)
-        local _mihoctl_env_file
-        _mihoctl_env_file="\$("\${_mihoctl_bin}" config env-file 2>/dev/null || true)"
-        if [[ -n "\${_mihoctl_env_file}" && -f "\${_mihoctl_env_file}" ]]; then
-          . "\${_mihoctl_env_file}"
-        fi
-      ;;
-    esac
-  fi
+  case "\${1-}" in
+    on|off|mode)
+      local _mihoctl_env_file
+      _mihoctl_env_file="\$("\${_mihoctl_bin}" config env-file 2>/dev/null || true)"
+      if [[ -n "\${_mihoctl_env_file}" && -f "\${_mihoctl_env_file}" ]]; then
+        . "\${_mihoctl_env_file}"
+      fi
+    ;;
+  esac
   return \${_mihoctl_status}
 }
 ${SHELL_INTEGRATION_END}
@@ -91,17 +91,15 @@ mihoctl() {
 
   "\${_mihoctl_bin}" "\$@"
   local _mihoctl_status=\$?
-  if [[ \${_mihoctl_status} -eq 0 ]]; then
-    case "\${1-}" in
-      on|off|mode)
-        local _mihoctl_env_file
-        _mihoctl_env_file="\$("\${_mihoctl_bin}" config env-file 2>/dev/null || true)"
-        if [[ -n "\${_mihoctl_env_file}" && -f "\${_mihoctl_env_file}" ]]; then
-          . "\${_mihoctl_env_file}"
-        fi
-      ;;
-    esac
-  fi
+  case "\${1-}" in
+    on|off|mode)
+      local _mihoctl_env_file
+      _mihoctl_env_file="\$("\${_mihoctl_bin}" config env-file 2>/dev/null || true)"
+      if [[ -n "\${_mihoctl_env_file}" && -f "\${_mihoctl_env_file}" ]]; then
+        . "\${_mihoctl_env_file}"
+      fi
+    ;;
+  esac
   return \${_mihoctl_status}
 }
 ${SHELL_INTEGRATION_END}
@@ -164,6 +162,14 @@ mkdir -p "${TARGET_DIR}"
 cp "${SCRIPT_DIR}/mihoctl" "${INSTALL_BIN}"
 chmod 755 "${INSTALL_BIN}"
 
+echo "==> Installing TUN helper to ${INSTALL_TUN_HELPER}"
+cp "${SCRIPT_DIR}/mihoctl-enable-tun" "${INSTALL_TUN_HELPER}"
+chmod 755 "${INSTALL_TUN_HELPER}"
+
+echo "==> Installing TUN cleanup helper to ${UNINSTALL_TUN_HELPER}"
+cp "${SCRIPT_DIR}/mihoctl-disable-tun" "${UNINSTALL_TUN_HELPER}"
+chmod 755 "${UNINSTALL_TUN_HELPER}"
+
 echo "==> Installing bundled assets to ${INSTALL_BUNDLED_DIR}"
 rm -rf "${INSTALL_BUNDLED_DIR}"
 cp -R "${SCRIPT_DIR}/bundled" "${INSTALL_BUNDLED_DIR}"
@@ -190,8 +196,16 @@ fi
 
 echo "You can start with:"
 echo "  ${INSTALL_BIN} sub add <subscription-url>"
+echo "  ${INSTALL_BIN} on"
+echo
+echo "If you want TUN mode, run once:"
+echo "  sudo ${INSTALL_TUN_HELPER}"
+echo "Then switch with:"
 echo "  ${INSTALL_BIN} mode tun"
 echo "  ${INSTALL_BIN} on"
+echo
+echo "If you later want to remove TUN authorization/service, run:"
+echo "  sudo ${UNINSTALL_TUN_HELPER}"
 echo
 echo "Shell completion was installed for bash/fish/zsh."
 echo "Bash/Zsh startup files were updated automatically."

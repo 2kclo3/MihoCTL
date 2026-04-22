@@ -73,7 +73,6 @@ type Subscription struct {
 	Name       string `json:"name"`
 	URL        string `json:"url"`
 	ConfigPath string `json:"config_path"`
-	UserAgent  string `json:"user_agent,omitempty"`
 }
 
 type HealthCheck struct {
@@ -218,7 +217,7 @@ func defaultConfig(paths Paths) *Config {
 	binaryPath := filepath.Join(paths.BinDir, "mihomo")
 	return &Config{
 		Language: defaultLanguage,
-		Mode:     "",
+		Mode:     "env",
 		Core: CoreConfig{
 			Repo:              "MetaCubeX/mihomo",
 			InstallDir:        paths.BinDir,

@@ -107,6 +107,21 @@ func (c *Client) CheckGroupDelay(ctx context.Context, group, testURL string, tim
 	return payload, nil
 }
 
+func (c *Client) CheckProxyDelay(ctx context.Context, proxy, testURL string, timeoutMS int) (int, error) {
+	query := url.Values{}
+	query.Set("url", testURL)
+	query.Set("timeout", fmt.Sprintf("%d", timeoutMS))
+
+	var payload struct {
+		Delay int `json:"delay"`
+	}
+	endpoint := path.Join("/proxies", url.PathEscape(proxy), "delay") + "?" + query.Encode()
+	if err := c.doJSON(ctx, http.MethodGet, endpoint, nil, &payload); err != nil {
+		return 0, err
+	}
+	return payload.Delay, nil
+}
+
 func (c *Client) ReloadConfig(ctx context.Context, configPath string) error {
 	query := url.Values{}
 	query.Set("force", "true")

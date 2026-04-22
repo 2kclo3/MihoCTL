@@ -3,10 +3,13 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -23,9 +26,13 @@ func newProxyCommand(application *app.App) *cobra.Command {
 	}
 
 	listCmd := &cobra.Command{
-		Use:   "ls",
-		Short: application.T("cmd.proxy.ls.short"),
+		Use:     "list",
+		Aliases: []string{"ls"},
+		Short:   application.T("cmd.proxy.ls.short"),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := ensureProxyCommandReady(cmd, application); err != nil {
+				return err
+			}
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
@@ -47,6 +54,9 @@ func newProxyCommand(application *app.App) *cobra.Command {
 			Short: application.T("cmd.proxy.use.short"),
 			Args:  cobra.RangeArgs(1, 2),
 			RunE: func(cmd *cobra.Command, args []string) error {
+				if err := ensureProxyCommandReady(cmd, application); err != nil {
+					return err
+				}
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
 
@@ -78,6 +88,9 @@ func newProxyCommand(application *app.App) *cobra.Command {
 			Use:   "check",
 			Short: application.T("cmd.proxy.check.short"),
 			RunE: func(cmd *cobra.Command, args []string) error {
+				if err := ensureProxyCommandReady(cmd, application); err != nil {
+					return err
+				}
 				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cancel()
 
@@ -86,18 +99,22 @@ func newProxyCommand(application *app.App) *cobra.Command {
 				if err != nil {
 					return err
 				}
+				totalNodes := 0
 				for _, group := range groups {
-					delays, err := client.CheckGroupDelay(ctx, group.Name, application.Config.HealthCheck.URL, application.Config.HealthCheck.TimeoutMS)
-					if err != nil {
-						renderProxyCheckFailure(cmd, application, group.Name)
+					totalNodes += len(group.All)
+				}
+				status := newProxyCheckStatus(cmd.ErrOrStderr(), application, len(groups), totalNodes)
+				status.Start()
+				defer status.Finish()
+
+				delayResults := measureGroupDelaysFast(ctx, client, groups, application.Config.HealthCheck.URL, application.Config.HealthCheck.TimeoutMS, status)
+				for i, group := range groups {
+					result := delayResults[group.Name]
+					if result == nil || (len(result.Delays) == 0 && result.Failed == len(group.All)) {
+						renderProxyCheckFailure(cmd, application, i, group)
 						continue
 					}
-					names := make([]string, 0, len(delays))
-					for proxy := range delays {
-						names = append(names, proxy)
-					}
-					sort.Strings(names)
-					renderProxyDelayGroup(cmd, application, group.Name, names, delays)
+					renderProxyDelayGroup(cmd, application, i, group, orderedDelayNames(group.All, result.Delays), result.Delays)
 				}
 				return nil
 			},
@@ -105,6 +122,10 @@ func newProxyCommand(application *app.App) *cobra.Command {
 	)
 
 	return proxyCmd
+}
+
+func ensureProxyCommandReady(cmd *cobra.Command, application *app.App) error {
+	return ensureMihomoRuntimeReady(cmd, application)
 }
 
 func resolveProxySelection(groups []mihomo.ProxyGroup, groupValue, proxyValue string) (string, string, error) {
@@ -175,12 +196,17 @@ func parseProxyIndex(value string) (int, bool) {
 
 func renderProxyGroup(cmd *cobra.Command, application *app.App, index int, group mihomo.ProxyGroup) {
 	width := terminalWidth(cmd.OutOrStdout())
-	renderProxyBlockHeader(cmd, width, application.Tf("msg.proxy.list.group_summary", map[string]any{
+	renderProxyBlockHeader(cmd, width, application.Tf("msg.proxy.list.group_title", map[string]any{
 		"index": index + 1,
 		"name":  group.Name,
-		"now":   fallbackProxyNow(group.Now, application),
+	}))
+	fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.proxy.list.current", map[string]any{
+		"node": selectableNodeLabel(group.All, group.Now, application.T("label.none")),
+	}))
+	fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.proxy.list.count", map[string]any{
 		"count": len(group.All),
 	}))
+	renderProxyBlockDivider(cmd, width)
 	if len(group.All) == 0 {
 		fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", application.T("label.none"))
 		renderProxyBlockFooter(cmd, width)
@@ -199,27 +225,46 @@ func fallbackProxyNow(value string, application *app.App) string {
 	return value
 }
 
-func renderProxyCheckFailure(cmd *cobra.Command, application *app.App, group string) {
+func renderProxyCheckFailure(cmd *cobra.Command, application *app.App, index int, group mihomo.ProxyGroup) {
 	width := terminalWidth(cmd.OutOrStdout())
-	renderProxyBlockHeader(cmd, width, application.Tf("msg.proxy.check.group", map[string]any{
-		"group": group,
+	renderProxyBlockHeader(cmd, width, application.Tf("msg.proxy.check.group_title", map[string]any{
+		"index": index + 1,
+		"group": group.Name,
 	}))
+	fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.proxy.check.current", map[string]any{
+		"node": selectableNodeLabel(group.All, group.Now, application.T("label.none")),
+	}))
+	fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.proxy.check.current_delay", map[string]any{
+		"delay": application.T("label.none"),
+	}))
+	renderProxyBlockDivider(cmd, width)
 	fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", application.Tf("msg.proxy.check.fail", map[string]any{
-		"group": group,
+		"group": group.Name,
 	}))
 	renderProxyBlockFooter(cmd, width)
 }
 
-func renderProxyDelayGroup(cmd *cobra.Command, application *app.App, group string, names []string, delays map[string]int) {
+func renderProxyDelayGroup(cmd *cobra.Command, application *app.App, index int, group mihomo.ProxyGroup, names []string, delays map[string]int) {
 	width := terminalWidth(cmd.OutOrStdout())
-	renderProxyBlockHeader(cmd, width, application.Tf("msg.proxy.check.group", map[string]any{
-		"group": group,
+	renderProxyBlockHeader(cmd, width, application.Tf("msg.proxy.check.group_title", map[string]any{
+		"index": index + 1,
+		"group": group.Name,
 	}))
-	items := make([]string, 0, len(names))
+	fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.proxy.check.current", map[string]any{
+		"node": selectableNodeLabel(group.All, group.Now, application.T("label.none")),
+	}))
+	fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.proxy.check.current_delay", map[string]any{
+		"delay": currentDelayLabel(group.Now, delays, application),
+	}))
+	renderProxyBlockDivider(cmd, width)
+	items := make([]delayCell, 0, len(names))
 	for _, name := range names {
-		items = append(items, fmt.Sprintf("%s: %dms", name, delays[name]))
+		items = append(items, delayCell{
+			label: selectableNodeLabel(group.All, name, application.T("label.none")),
+			right: formatDelayMS(delays[name]),
+		})
 	}
-	for _, line := range formatCells(items, width) {
+	for _, line := range formatDelayCells(items, width) {
 		fmt.Fprintln(cmd.OutOrStdout(), line)
 	}
 	renderProxyBlockFooter(cmd, width)
@@ -259,26 +304,72 @@ func formatCells(items []string, width int) []string {
 	for _, item := range items {
 		row = append(row, padCell(item, actualCellWidth))
 		if len(row) == columns {
-			lines = append(lines, "  "+strings.TrimRight(strings.Join(row, "  "), " "))
+			lines = append(lines, "  "+strings.TrimRight(strings.Join(row, " | "), " "))
 			row = row[:0]
 		}
 	}
 	if len(row) > 0 {
-		lines = append(lines, "  "+strings.TrimRight(strings.Join(row, "  "), " "))
+		lines = append(lines, "  "+strings.TrimRight(strings.Join(row, " | "), " "))
+	}
+	return lines
+}
+
+type delayCell struct {
+	label string
+	right string
+}
+
+func formatDelayCells(items []delayCell, width int) []string {
+	if len(items) == 0 {
+		return nil
+	}
+
+	contentWidth := maxInt(width-4, 48)
+	longestLabel := 0
+	longestRight := 0
+	for _, item := range items {
+		longestLabel = maxInt(longestLabel, displayWidth(item.label))
+		longestRight = maxInt(longestRight, displayWidth(item.right))
+	}
+
+	cellWidth := clampInt(longestLabel+longestRight+3, 22, 44)
+	columns := maxInt(1, contentWidth/cellWidth)
+	if columns > len(items) {
+		columns = len(items)
+	}
+	actualCellWidth := maxInt(16, (contentWidth-(columns-1)*2)/columns)
+	labelWidth := maxInt(8, actualCellWidth-longestRight-1)
+
+	lines := make([]string, 0, (len(items)+columns-1)/columns)
+	row := make([]string, 0, columns)
+	for _, item := range items {
+		cell := padCell(item.label, labelWidth) + " " + leftPadCell(item.right, longestRight)
+		row = append(row, padCell(cell, actualCellWidth))
+		if len(row) == columns {
+			lines = append(lines, "  "+strings.TrimRight(strings.Join(row, " | "), " "))
+			row = row[:0]
+		}
+	}
+	if len(row) > 0 {
+		lines = append(lines, "  "+strings.TrimRight(strings.Join(row, " | "), " "))
 	}
 	return lines
 }
 
 func renderProxyBlockHeader(cmd *cobra.Command, width int, title string) {
-	lineWidth := maxInt(48, minInt(width, 120))
+	lineWidth := normalizedBlockWidth(width)
 	border := strings.Repeat("=", lineWidth)
 	fmt.Fprintln(cmd.OutOrStdout(), border)
 	fmt.Fprintln(cmd.OutOrStdout(), title)
+}
+
+func renderProxyBlockDivider(cmd *cobra.Command, width int) {
+	lineWidth := normalizedBlockWidth(width)
 	fmt.Fprintln(cmd.OutOrStdout(), strings.Repeat("-", lineWidth))
 }
 
 func renderProxyBlockFooter(cmd *cobra.Command, width int) {
-	lineWidth := maxInt(48, minInt(width, 120))
+	lineWidth := normalizedBlockWidth(width)
 	fmt.Fprintln(cmd.OutOrStdout(), strings.Repeat("=", lineWidth))
 }
 
@@ -301,6 +392,14 @@ func padCell(value string, width int) string {
 		return text
 	}
 	return text + strings.Repeat(" ", padding)
+}
+
+func leftPadCell(value string, width int) string {
+	padding := width - displayWidth(value)
+	if padding <= 0 {
+		return value
+	}
+	return strings.Repeat(" ", padding) + value
 }
 
 func truncateCell(value string, width int) string {
@@ -405,4 +504,210 @@ func maxInt(a, b int) int {
 
 func clampInt(value, minValue, maxValue int) int {
 	return minInt(maxInt(value, minValue), maxValue)
+}
+
+func normalizedBlockWidth(width int) int {
+	if width <= 0 {
+		return 72
+	}
+	return maxInt(48, width-2)
+}
+
+func proxyNodeIndex(nodes []string, value string) (int, bool) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return 0, false
+	}
+	for i, node := range nodes {
+		if node == trimmed {
+			return i + 1, true
+		}
+	}
+	return 0, false
+}
+
+func selectableNodeLabel(nodes []string, value string, noneLabel string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return noneLabel
+	}
+	if index, ok := proxyNodeIndex(nodes, trimmed); ok {
+		return fmt.Sprintf("[%d] %s", index, trimmed)
+	}
+	return trimmed
+}
+
+func orderedDelayNames(nodes []string, delays map[string]int) []string {
+	names := make([]string, 0, len(delays))
+	seen := make(map[string]struct{}, len(delays))
+	for _, node := range nodes {
+		if _, ok := delays[node]; !ok {
+			continue
+		}
+		names = append(names, node)
+		seen[node] = struct{}{}
+	}
+
+	extras := make([]string, 0)
+	for name := range delays {
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		extras = append(extras, name)
+	}
+	sort.Strings(extras)
+	return append(names, extras...)
+}
+
+func currentDelayLabel(current string, delays map[string]int, application *app.App) string {
+	delay, ok := delays[strings.TrimSpace(current)]
+	if !ok {
+		return application.T("label.none")
+	}
+	return formatDelayMS(delay)
+}
+
+func formatDelayMS(delay int) string {
+	if delay <= 0 {
+		return "-"
+	}
+	return fmt.Sprintf("%4d ms", delay)
+}
+
+type groupDelayResult struct {
+	Delays map[string]int
+	Failed int
+}
+
+func measureGroupDelaysFast(ctx context.Context, client *mihomo.Client, groups []mihomo.ProxyGroup, testURL string, timeoutMS int, status *proxyCheckStatus) map[string]*groupDelayResult {
+	results := make(map[string]*groupDelayResult, len(groups))
+	if len(groups) == 0 {
+		return results
+	}
+
+	var (
+		mu sync.Mutex
+		wg sync.WaitGroup
+	)
+
+	for _, group := range groups {
+		group := group
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			delays, err := client.CheckGroupDelay(ctx, group.Name, testURL, timeoutMS)
+			result := &groupDelayResult{
+				Delays: map[string]int{},
+				Failed: len(group.All),
+			}
+			if err == nil {
+				failed := 0
+				for _, node := range group.All {
+					delay, ok := delays[node]
+					if !ok || delay <= 0 {
+						failed++
+						continue
+					}
+					result.Delays[node] = delay
+				}
+				result.Failed = failed
+			}
+
+			mu.Lock()
+			results[group.Name] = result
+			mu.Unlock()
+			if status != nil {
+				status.Advance(group.Name, len(group.All))
+			}
+		}()
+	}
+
+	wg.Wait()
+	return results
+}
+
+type proxyCheckStatus struct {
+	out         io.Writer
+	application *app.App
+	totalGroups int
+	startedAt   time.Time
+	done        chan struct{}
+	once        sync.Once
+	doneGroups  atomic.Int64
+	lastWidth   atomic.Int64
+}
+
+func newProxyCheckStatus(out io.Writer, application *app.App, totalGroups, totalNodes int) *proxyCheckStatus {
+	if out == nil {
+		out = io.Discard
+	}
+	return &proxyCheckStatus{
+		out:         out,
+		application: application,
+		totalGroups: maxInt(totalGroups, 1),
+		done:        make(chan struct{}),
+	}
+}
+
+func (s *proxyCheckStatus) Start() {
+	s.startedAt = time.Now()
+	go s.loop()
+}
+
+func (s *proxyCheckStatus) Advance(group string, nodeCount int) {
+	s.doneGroups.Add(1)
+	s.render()
+}
+
+func (s *proxyCheckStatus) Finish() {
+	s.once.Do(func() {
+		close(s.done)
+		s.clear()
+	})
+}
+
+func (s *proxyCheckStatus) loop() {
+	s.render()
+	ticker := time.NewTicker(150 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			s.render()
+		case <-s.done:
+			return
+		}
+	}
+}
+
+func (s *proxyCheckStatus) render() {
+	spinnerFrames := []string{"-", "\\", "|", "/"}
+	frame := spinnerFrames[int(time.Since(s.startedAt)/(150*time.Millisecond))%len(spinnerFrames)]
+
+	line := s.application.Tf("msg.proxy.check.start", map[string]any{
+		"spinner":      frame,
+		"groups_total": s.totalGroups,
+		"elapsed":      time.Since(s.startedAt).Truncate(time.Second),
+	})
+
+	width := normalizedBlockWidth(terminalWidth(s.out))
+	if displayWidth(line) > width {
+		line = truncateCell(line, width)
+	}
+	line = padCell(line, width)
+	lastWidth := int(s.lastWidth.Load())
+	if width > lastWidth {
+		s.lastWidth.Store(int64(width))
+		lastWidth = width
+	}
+	fmt.Fprintf(s.out, "\r%s%s", line, strings.Repeat(" ", maxInt(0, lastWidth-displayWidth(line))))
+}
+
+func (s *proxyCheckStatus) clear() {
+	lastWidth := int(s.lastWidth.Load())
+	if lastWidth <= 0 {
+		return
+	}
+	fmt.Fprintf(s.out, "\r%s\r", strings.Repeat(" ", lastWidth))
 }

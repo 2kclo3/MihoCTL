@@ -61,3 +61,36 @@ func TestResolveProxySelectionUsesFirstNonGlobalGroupByDefault(t *testing.T) {
 		t.Fatalf("proxy = %q, want %q", proxy, "JP")
 	}
 }
+
+func TestSelectableNodeLabelUsesListIndex(t *testing.T) {
+	t.Parallel()
+
+	nodes := []string{"DIRECT", "REJECT", "JP"}
+
+	label := selectableNodeLabel(nodes, "REJECT", "无")
+	if label != "[2] REJECT" {
+		t.Fatalf("label = %q, want %q", label, "[2] REJECT")
+	}
+}
+
+func TestOrderedDelayNamesKeepsListOrder(t *testing.T) {
+	t.Parallel()
+
+	nodes := []string{"B", "A", "C"}
+	delays := map[string]int{
+		"A": 10,
+		"B": 20,
+		"C": 30,
+	}
+
+	ordered := orderedDelayNames(nodes, delays)
+	want := []string{"B", "A", "C"}
+	if len(ordered) != len(want) {
+		t.Fatalf("len(ordered) = %d, want %d", len(ordered), len(want))
+	}
+	for i := range want {
+		if ordered[i] != want[i] {
+			t.Fatalf("ordered[%d] = %q, want %q", i, ordered[i], want[i])
+		}
+	}
+}

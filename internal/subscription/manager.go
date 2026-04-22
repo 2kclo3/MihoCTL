@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -30,10 +29,9 @@ type Manager struct {
 }
 
 type AddResult struct {
-	Entry             config.Subscription
-	Update            *UpdateResult
-	ResolvedFrom      string
-	DetectedUserAgent string
+	Entry        config.Subscription
+	Update       *UpdateResult
+	ResolvedFrom string
 }
 
 type UpdateResult struct {
@@ -80,7 +78,6 @@ func (m *Manager) Add(ctx context.Context, rawURL string) (*AddResult, error) {
 		Name:       name,
 		URL:        importLink.URL,
 		ConfigPath: filepath.Join(m.paths.SubDir, sanitizeFileName(name)+".yaml"),
-		UserAgent:  strings.TrimSpace(importLink.UserAgent),
 	}
 	m.cfg.Subscriptions = append(m.cfg.Subscriptions, entry)
 	if firstSubscription {
@@ -102,9 +99,6 @@ func (m *Manager) Add(ctx context.Context, rawURL string) (*AddResult, error) {
 	if importLink.Wrapped && importLink.Original != importLink.URL {
 		addResult.ResolvedFrom = importLink.Original
 	}
-	if entry.UserAgent != "" {
-		addResult.DetectedUserAgent = entry.UserAgent
-	}
 	return addResult, nil
 }
 
@@ -124,11 +118,11 @@ type BatchFailure struct {
 }
 
 type fetchAttemptResult struct {
-	response  *http.Response
-	userAgent string
+	response *http.Response
 }
 
 const compatibilityClientVersion = "999.999.999"
+const subscriptionUserAgent = "clash-verge/v" + compatibilityClientVersion
 
 func (m *Manager) Update(ctx context.Context, target string) (*BatchUpdateResult, error) {
 	if len(m.cfg.Subscriptions) == 0 {
@@ -205,30 +199,6 @@ func (m *Manager) Remove(ctx context.Context, target string) (*config.Subscripti
 	return &item, nil
 }
 
-func (m *Manager) SetUserAgent(target, userAgent string) (*config.Subscription, error) {
-	item, err := m.findSubscription(target)
-	if err != nil {
-		return nil, err
-	}
-	trimmedUA := strings.TrimSpace(userAgent)
-	for i := range m.cfg.Subscriptions {
-		entry := &m.cfg.Subscriptions[i]
-		if entry.Name != item.Name && entry.URL != item.URL {
-			continue
-		}
-		entry.UserAgent = trimmedUA
-		updated := *entry
-		return &updated, nil
-	}
-	return nil, core.NewActionError("subscription_not_found", "err.subscription.not_found", errors.New(target), "", map[string]any{
-		"name": target,
-	}, nil)
-}
-
-func (m *Manager) ClearUserAgent(target string) (*config.Subscription, error) {
-	return m.SetUserAgent(target, "")
-}
-
 func (m *Manager) updateSubscription(ctx context.Context, item config.Subscription) (*UpdateResult, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, item.URL, nil)
 	if err != nil {
@@ -238,7 +208,7 @@ func (m *Manager) updateSubscription(ctx context.Context, item config.Subscripti
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	attempt, err := m.fetchSubscription(ctx, client, req, item)
+	attempt, err := m.fetchSubscription(ctx, client, req)
 	if err != nil {
 		return nil, core.NewActionError("subscription_download_failed", "err.subscription.download", err, "err.subscription.check_url", map[string]any{
 			"url": item.URL,
@@ -246,11 +216,6 @@ func (m *Manager) updateSubscription(ctx context.Context, item config.Subscripti
 	}
 	resp := attempt.response
 	defer resp.Body.Close()
-
-	if attempt.userAgent != "" && attempt.userAgent != item.UserAgent {
-		item.UserAgent = attempt.userAgent
-		m.updateSubscriptionMeta(item)
-	}
 
 	if resp.StatusCode >= 300 {
 		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
@@ -303,39 +268,12 @@ func (m *Manager) updateSubscription(ctx context.Context, item config.Subscripti
 	return result, nil
 }
 
-func (m *Manager) fetchSubscription(ctx context.Context, client *http.Client, baseReq *http.Request, item config.Subscription) (*fetchAttemptResult, error) {
-	candidates := buildUserAgentCandidates(item.UserAgent)
-	var lastResp *http.Response
+func (m *Manager) fetchSubscription(ctx context.Context, client *http.Client, baseReq *http.Request) (*fetchAttemptResult, error) {
+	req := baseReq.Clone(ctx)
+	// 订阅拉取统一使用 clash-verge UA，对用户透明。
+	applySubscriptionHeaders(req, subscriptionUserAgent)
 
-	for _, candidate := range candidates {
-		req := baseReq.Clone(ctx)
-		// 部分机场会按客户端特征限制订阅拉取，401/403 时尝试常见 Clash/Mihomo 客户端 UA 兜底。
-		applySubscriptionHeaders(req, candidate)
-
-		resp, err := client.Do(req)
-		if err != nil {
-			if lastResp != nil {
-				lastResp.Body.Close()
-			}
-			return nil, err
-		}
-		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-			if lastResp != nil {
-				lastResp.Body.Close()
-			}
-			lastResp = resp
-			continue
-		}
-		if lastResp != nil {
-			lastResp.Body.Close()
-		}
-		return &fetchAttemptResult{response: resp, userAgent: candidate}, nil
-	}
-
-	if lastResp != nil {
-		return &fetchAttemptResult{response: lastResp}, nil
-	}
-	resp, err := client.Do(baseReq.Clone(ctx))
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -421,40 +359,6 @@ func parseSelectionIndex(value string) (int, bool) {
 	return index - 1, true
 }
 
-func (m *Manager) updateSubscriptionMeta(updated config.Subscription) {
-	for i := range m.cfg.Subscriptions {
-		item := &m.cfg.Subscriptions[i]
-		if item.Name != updated.Name && item.URL != updated.URL {
-			continue
-		}
-		item.UserAgent = updated.UserAgent
-		if item.ConfigPath == "" {
-			item.ConfigPath = updated.ConfigPath
-		}
-		return
-	}
-}
-
-func buildUserAgentCandidates(preferred string) []string {
-	candidates := make([]string, 0, len(commonSubscriptionUserAgents)+2)
-	seen := map[string]struct{}{}
-	add := func(value string) {
-		value = strings.TrimSpace(value)
-		if _, ok := seen[value]; ok {
-			return
-		}
-		seen[value] = struct{}{}
-		candidates = append(candidates, value)
-	}
-
-	add(preferred)
-	for _, value := range commonSubscriptionUserAgents {
-		add(value)
-	}
-	add("")
-	return candidates
-}
-
 func applySubscriptionHeaders(req *http.Request, userAgent string) {
 	req.Header.Set("Accept", "application/x-yaml, text/yaml, text/plain, */*")
 	if username := req.URL.User.Username(); username != "" {
@@ -469,47 +373,6 @@ func applySubscriptionHeaders(req *http.Request, userAgent string) {
 		return
 	}
 	req.Header.Set("User-Agent", userAgent)
-}
-
-var commonSubscriptionUserAgents = func() []string {
-	flClashUA := buildFlClashCompatibleUserAgent()
-	return []string{
-		buildClashVergeCompatibleUserAgent(),
-		flClashUA,
-		buildClashForWindowsCompatibleUserAgent(),
-		buildV2RayNCompatibleUserAgent(),
-		"ClashMetaForAndroid",
-		"ClashMeta",
-		"Mihomo",
-		"Clash",
-		"FlClash",
-	}
-}()
-
-func buildFlClashCompatibleUserAgent() string {
-	// 使用兼容高版本号模板，避免每次真实客户端小版本变化都要更新代码。
-	return fmt.Sprintf("FlClash/v%s clash-verge Platform/%s", compatibilityClientVersion, flClashPlatformName())
-}
-
-func buildClashVergeCompatibleUserAgent() string {
-	return "clash-verge/v" + compatibilityClientVersion
-}
-
-func buildClashForWindowsCompatibleUserAgent() string {
-	return "ClashforWindows/" + compatibilityClientVersion
-}
-
-func buildV2RayNCompatibleUserAgent() string {
-	return "v2rayN/" + compatibilityClientVersion
-}
-
-func flClashPlatformName() string {
-	switch runtime.GOOS {
-	case "darwin":
-		return "macos"
-	default:
-		return runtime.GOOS
-	}
 }
 
 func uniqueName(items []config.Subscription, base string) string {
