@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"path/filepath"
 	"testing"
 
+	"mihoctl/internal/app"
+	"mihoctl/internal/config"
 	"mihoctl/internal/mihomo"
 )
 
@@ -20,7 +23,8 @@ func TestResolveProxySelectionByIndex(t *testing.T) {
 		},
 	}
 
-	group, proxy, err := resolveProxySelection(groups, "2", "1")
+	application := newTestApplication(t)
+	group, proxy, err := resolveProxySelection(application, groups, "2", "1")
 	if err != nil {
 		t.Fatalf("resolveProxySelection returned error: %v", err)
 	}
@@ -50,7 +54,8 @@ func TestResolveProxySelectionUsesFirstNonGlobalGroupByDefault(t *testing.T) {
 		},
 	}
 
-	group, proxy, err := resolveProxySelection(groups, "", "2")
+	application := newTestApplication(t)
+	group, proxy, err := resolveProxySelection(application, groups, "", "2")
 	if err != nil {
 		t.Fatalf("resolveProxySelection returned error: %v", err)
 	}
@@ -93,4 +98,17 @@ func TestOrderedDelayNamesKeepsListOrder(t *testing.T) {
 			t.Fatalf("ordered[%d] = %q, want %q", i, ordered[i], want[i])
 		}
 	}
+}
+
+func newTestApplication(t *testing.T) *app.App {
+	t.Helper()
+
+	application, err := app.New(config.BootstrapOptions{
+		Lang:       "en-US",
+		ConfigPath: filepath.Join(t.TempDir(), "config.json"),
+	})
+	if err != nil {
+		t.Fatalf("app.New returned error: %v", err)
+	}
+	return application
 }

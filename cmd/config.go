@@ -20,7 +20,7 @@ func newConfigCommand(application *app.App) *cobra.Command {
 	configCmd.AddCommand(
 		&cobra.Command{
 			Use:    "env-file",
-			Short:  "print the managed shell env file path",
+			Short:  application.T("cmd.config.envfile.short"),
 			Hidden: true,
 			RunE: func(cmd *cobra.Command, args []string) error {
 				fmt.Fprintln(cmd.OutOrStdout(), filepath.Join(application.Paths.AppHome, "system-proxy.env"))

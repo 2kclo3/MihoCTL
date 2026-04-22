@@ -100,14 +100,16 @@ func (m *Manager) Uninstall(cfg *config.Config) (*UninstallResult, error) {
 
 	if cfg != nil {
 		removeDir(result, m.paths.AppHome)
-		removeDir(result, cfg.Mihomo.WorkDir)
-		if dir := filepath.Dir(cfg.Mihomo.ConfigPath); dir != "" && dir != cfg.Mihomo.WorkDir {
+		if m.shouldRemoveManagedPath(cfg.Mihomo.WorkDir) {
+			removeDir(result, cfg.Mihomo.WorkDir)
+		}
+		if dir := filepath.Dir(cfg.Mihomo.ConfigPath); dir != "" && dir != cfg.Mihomo.WorkDir && m.shouldRemoveManagedPath(dir) {
 			removeDir(result, dir)
 		}
-		if dir := cfg.Core.DatabaseDir; dir != "" && dir != cfg.Mihomo.WorkDir {
+		if dir := cfg.Core.DatabaseDir; dir != "" && dir != cfg.Mihomo.WorkDir && m.shouldRemoveManagedPath(dir) {
 			removeDir(result, dir)
 		}
-		if binary := cfg.Mihomo.BinaryPath; binary != "" && binary != m.paths.ExecPath {
+		if binary := cfg.Mihomo.BinaryPath; binary != "" && binary != m.paths.ExecPath && m.shouldRemoveManagedPath(binary) {
 			removeFile(result, binary)
 		}
 	}
@@ -295,4 +297,53 @@ func isIgnorableCleanupError(err error) bool {
 	default:
 		return false
 	}
+}
+
+func (m *Manager) shouldRemoveManagedPath(path string) bool {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return false
+	}
+	managedRoots := []string{
+		m.paths.AppHome,
+		m.paths.BinDir,
+		defaultManagedMihomoDir(),
+	}
+	for _, root := range managedRoots {
+		if isSameOrWithin(path, root) {
+			return true
+		}
+	}
+	return false
+}
+
+func defaultManagedMihomoDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		return filepath.Join(home, "Library", "Application Support", "mihomo")
+	default:
+		return filepath.Join(home, ".config", "mihomo")
+	}
+}
+
+func isSameOrWithin(path, root string) bool {
+	path = strings.TrimSpace(path)
+	root = strings.TrimSpace(root)
+	if path == "" || root == "" {
+		return false
+	}
+	cleanPath := filepath.Clean(path)
+	cleanRoot := filepath.Clean(root)
+	if cleanPath == cleanRoot {
+		return true
+	}
+	rel, err := filepath.Rel(cleanRoot, cleanPath)
+	if err != nil {
+		return false
+	}
+	return rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator))
 }

@@ -39,6 +39,10 @@ func newDoctorCommand(application *app.App) *cobra.Command {
 				"name":   application.T("msg.doctor.api"),
 				"status": doctorStatusLabel(apiErr == nil, application),
 			}))
+			fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.doctor.item", map[string]any{
+				"name":   application.T("msg.doctor.boot"),
+				"status": doctorBootStatusLabel(application),
+			}))
 
 			fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.mode.current", map[string]any{
 				"mode": mode.ResolveMode(application.Config.Mode),

@@ -60,11 +60,11 @@ func runModeToggle(cmd *cobra.Command, application *app.App, enabled bool) error
 		}
 		if enabled {
 			fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.mode.env.on.success"))
-			fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.mode.env.on.hint"))
+			fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.mode.env.on.hint", envHintData(application)))
 			return nil
 		}
 		fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.mode.env.off.success"))
-		fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.mode.env.off.hint"))
+		fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.mode.env.off.hint", envHintData(application)))
 		return nil
 	default:
 		if err := manager.SetTun(enabled); err != nil {
@@ -81,5 +81,11 @@ func runModeToggle(cmd *cobra.Command, application *app.App, enabled bool) error
 		}
 		fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.mode.tun.off.success"))
 		return nil
+	}
+}
+
+func envHintData(application *app.App) map[string]any {
+	return map[string]any{
+		"command": envSyncCommand(application),
 	}
 }

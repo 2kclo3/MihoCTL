@@ -27,8 +27,8 @@ func NewRootCommand(application *app.App) *cobra.Command {
 	completionCmd := newCompletionCommand(application)
 	coreCmd := newCoreCommand(application)
 	selfCmd := newSelfCommand(application)
-	serviceCmd := newServiceCommand(application)
 	configCmd := newConfigCommand(application)
+	bootCmd := newBootCommand(application)
 
 	startCmd.Hidden = true
 	stopCmd.Hidden = true
@@ -36,11 +36,11 @@ func NewRootCommand(application *app.App) *cobra.Command {
 	completionCmd.Hidden = true
 	coreCmd.Hidden = true
 	selfCmd.Hidden = true
-	serviceCmd.Hidden = true
 	configCmd.Hidden = true
 
 	rootCmd.AddCommand(
 		newStatusCommand(application),
+		bootCmd,
 		newSubscriptionCommand(application),
 		newProxyCommand(application),
 		newModeCommand(application),
@@ -54,7 +54,6 @@ func NewRootCommand(application *app.App) *cobra.Command {
 		completionCmd,
 		coreCmd,
 		selfCmd,
-		serviceCmd,
 		configCmd,
 	)
 

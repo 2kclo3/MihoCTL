@@ -70,7 +70,7 @@ func newProxyCommand(application *app.App) *cobra.Command {
 					groupValue = args[0]
 					proxyValue = args[1]
 				}
-				group, proxy, err := resolveProxySelection(groups, groupValue, proxyValue)
+				group, proxy, err := resolveProxySelection(application, groups, groupValue, proxyValue)
 				if err != nil {
 					return err
 				}
@@ -128,39 +128,43 @@ func ensureProxyCommandReady(cmd *cobra.Command, application *app.App) error {
 	return ensureMihomoRuntimeReady(cmd, application)
 }
 
-func resolveProxySelection(groups []mihomo.ProxyGroup, groupValue, proxyValue string) (string, string, error) {
-	group, err := selectProxyGroup(groups, groupValue)
+func resolveProxySelection(application *app.App, groups []mihomo.ProxyGroup, groupValue, proxyValue string) (string, string, error) {
+	group, err := selectProxyGroup(application, groups, groupValue)
 	if err != nil {
 		return "", "", err
 	}
-	proxy, err := selectProxyNode(group.All, proxyValue)
+	proxy, err := selectProxyNode(application, group.All, proxyValue)
 	if err != nil {
 		return "", "", err
 	}
 	return group.Name, proxy, nil
 }
 
-func selectProxyGroup(groups []mihomo.ProxyGroup, value string) (mihomo.ProxyGroup, error) {
+func selectProxyGroup(application *app.App, groups []mihomo.ProxyGroup, value string) (mihomo.ProxyGroup, error) {
 	if strings.TrimSpace(value) == "" {
-		return selectDefaultProxyGroup(groups)
+		return selectDefaultProxyGroup(application, groups)
 	}
 	if index, ok := parseProxyIndex(value); ok {
 		if index >= 0 && index < len(groups) {
 			return groups[index], nil
 		}
-		return mihomo.ProxyGroup{}, fmt.Errorf("proxy group index out of range: %s", value)
+		return mihomo.ProxyGroup{}, fmt.Errorf("%s", application.Tf("err.proxy.group_index_out_of_range", map[string]any{
+			"value": value,
+		}))
 	}
 	for _, group := range groups {
 		if group.Name == strings.TrimSpace(value) {
 			return group, nil
 		}
 	}
-	return mihomo.ProxyGroup{}, fmt.Errorf("proxy group not found: %s", value)
+	return mihomo.ProxyGroup{}, fmt.Errorf("%s", application.Tf("err.proxy.group_not_found", map[string]any{
+		"value": value,
+	}))
 }
 
-func selectDefaultProxyGroup(groups []mihomo.ProxyGroup) (mihomo.ProxyGroup, error) {
+func selectDefaultProxyGroup(application *app.App, groups []mihomo.ProxyGroup) (mihomo.ProxyGroup, error) {
 	if len(groups) == 0 {
-		return mihomo.ProxyGroup{}, fmt.Errorf("proxy group not found")
+		return mihomo.ProxyGroup{}, fmt.Errorf("%s", application.T("err.proxy.group_empty"))
 	}
 	for _, group := range groups {
 		if strings.EqualFold(strings.TrimSpace(group.Name), "GLOBAL") {
@@ -171,19 +175,23 @@ func selectDefaultProxyGroup(groups []mihomo.ProxyGroup) (mihomo.ProxyGroup, err
 	return groups[0], nil
 }
 
-func selectProxyNode(nodes []string, value string) (string, error) {
+func selectProxyNode(application *app.App, nodes []string, value string) (string, error) {
 	if index, ok := parseProxyIndex(value); ok {
 		if index >= 0 && index < len(nodes) {
 			return nodes[index], nil
 		}
-		return "", fmt.Errorf("proxy node index out of range: %s", value)
+		return "", fmt.Errorf("%s", application.Tf("err.proxy.node_index_out_of_range", map[string]any{
+			"value": value,
+		}))
 	}
 	for _, node := range nodes {
 		if node == strings.TrimSpace(value) {
 			return node, nil
 		}
 	}
-	return "", fmt.Errorf("proxy node not found: %s", value)
+	return "", fmt.Errorf("%s", application.Tf("err.proxy.node_not_found", map[string]any{
+		"value": value,
+	}))
 }
 
 func parseProxyIndex(value string) (int, bool) {

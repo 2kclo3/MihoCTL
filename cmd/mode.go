@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"mihoctl/internal/app"
+	"mihoctl/internal/core"
 	"mihoctl/internal/mode"
 )
 
@@ -29,7 +30,9 @@ func newModeCommand(application *app.App) *cobra.Command {
 
 			nextMode := mode.NormalizeMode(args[0])
 			if nextMode == "" {
-				return fmt.Errorf("unsupported mode: %s", args[0])
+				return core.NewActionError("mode_invalid", "err.mode.invalid", nil, "err.mode.invalid_hint", map[string]any{
+					"mode": args[0],
+				}, nil)
 			}
 			if nextMode == currentMode {
 				fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.mode.current", map[string]any{
@@ -73,7 +76,7 @@ func newModeCommand(application *app.App) *cobra.Command {
 				switch nextMode {
 				case mode.ModeEnv:
 					fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.mode.env.on.success"))
-					fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.mode.env.on.hint"))
+					fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.mode.env.on.hint", envHintData(application)))
 				default:
 					fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.mode.tun.on.success"))
 				}
