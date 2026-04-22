@@ -210,4 +210,4 @@ echo
 echo "Shell completion was installed for bash/fish/zsh."
 echo "Bash/Zsh startup files were updated automatically."
 echo "Open a new terminal, or reload your shell config to use completion immediately."
-echo "The shell wrapper also makes env mode changes affect the current terminal after reload."
+echo "The shell wrapper also syncs env mode changes back to the current terminal when you run on/off/mode through the shell function."

@@ -95,15 +95,23 @@ has_systemd_unit() {
   [[ -f /etc/systemd/system/mihomo.service ]]
 }
 
+is_systemd_active() {
+  command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet mihomo
+}
+
 restart_linux_runtime() {
   local mihomo_bin="$1"
   local was_running=0
+  local was_service_active=0
 
   if pgrep -f "${mihomo_bin}" >/dev/null 2>&1; then
     was_running=1
   fi
+  if has_systemd_unit && is_systemd_active; then
+    was_service_active=1
+  fi
 
-  if command -v systemctl >/dev/null 2>&1 && has_systemd_unit; then
+  if [[ "${was_service_active}" -eq 1 ]]; then
     echo "==> Restarting Mihomo systemd service so new capabilities take effect"
     systemctl restart mihomo
     return
@@ -154,7 +162,7 @@ case "${OS_NAME}" in
 
     echo
     echo "TUN capability granted successfully."
-    echo "Any running Mihomo instance has been restarted or stopped if needed."
+    echo "If Mihomo was already running, it has been restarted with the new capability."
     echo "You can now rerun:"
     echo "  mihoctl mode tun"
     echo "  mihoctl on"
@@ -171,7 +179,7 @@ case "${OS_NAME}" in
 
     echo
     echo "TUN service enabled successfully."
-    echo "Any running Mihomo instance has been switched to LaunchDaemon mode if needed."
+    echo "If Mihomo was already running, it has been switched to LaunchDaemon mode."
     echo "You can now rerun:"
     echo "  mihoctl mode tun"
     echo "  mihoctl on"

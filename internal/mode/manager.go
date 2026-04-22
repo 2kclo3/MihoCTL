@@ -401,7 +401,7 @@ func (m *Manager) tunPermissionSteps(binaryPath, helperPath string) string {
 	if strings.EqualFold(strings.TrimSpace(m.cfg.Language), "en-US") {
 		if helperExists && (runtime.GOOS == "linux" || runtime.GOOS == "darwin") {
 			return fmt.Sprintf(
-				"Run `sudo %s` once, then rerun `mihoctl on`; if TUN still does not work, inspect the log %s",
+				"Run `sudo %s` once, then rerun `mihoctl mode tun` or `mihoctl on` as needed; if TUN still does not work, inspect the log %s",
 				helperPath,
 				logPath,
 			)
@@ -409,7 +409,7 @@ func (m *Manager) tunPermissionSteps(binaryPath, helperPath string) string {
 		switch runtime.GOOS {
 		case "linux":
 			return fmt.Sprintf(
-				"Run `sudo setcap cap_net_admin,cap_net_raw+ep %s` once, then rerun `mihoctl on`; if TUN still does not work, inspect the log %s",
+				"Run `sudo setcap cap_net_admin,cap_net_raw+ep %s` once, then rerun `mihoctl mode tun` or `mihoctl on` as needed; if TUN still does not work, inspect the log %s",
 				binaryPath,
 				logPath,
 			)
@@ -422,7 +422,7 @@ func (m *Manager) tunPermissionSteps(binaryPath, helperPath string) string {
 
 	if helperExists && (runtime.GOOS == "linux" || runtime.GOOS == "darwin") {
 		return fmt.Sprintf(
-			"请先执行一次 `sudo %s`，然后重新执行 `mihoctl on`；如果仍然失败，再查看日志 `%s`",
+			"请先执行一次 `sudo %s`，然后按需要重新执行 `mihoctl mode tun` 或 `mihoctl on`；如果仍然失败，再查看日志 `%s`",
 			helperPath,
 			logPath,
 		)
@@ -431,7 +431,7 @@ func (m *Manager) tunPermissionSteps(binaryPath, helperPath string) string {
 	switch runtime.GOOS {
 	case "linux":
 		return fmt.Sprintf(
-			"请先执行一次 `sudo setcap cap_net_admin,cap_net_raw+ep %s`，然后重新执行 `mihoctl on`；如果仍然失败，再查看日志 `%s`",
+			"请先执行一次 `sudo setcap cap_net_admin,cap_net_raw+ep %s`，然后按需要重新执行 `mihoctl mode tun` 或 `mihoctl on`；如果仍然失败，再查看日志 `%s`",
 			binaryPath,
 			logPath,
 		)

@@ -91,14 +91,32 @@ restart_user_managed_runtime() {
   run_as_target_user "${TARGET_USER}" "${MIHOCTL_BIN}" --config "${TARGET_CONFIG}" start >/dev/null || true
 }
 
+has_systemd_unit() {
+  [[ -f /etc/systemd/system/mihomo.service ]]
+}
+
+is_systemd_active() {
+  command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet mihomo
+}
+
 stop_linux_runtime() {
   local mihomo_bin="$1"
   local was_running=0
+  local was_service_active=0
 
   if pgrep -f "${mihomo_bin}" >/dev/null 2>&1; then
     was_running=1
     echo "==> Stopping running Mihomo process so removed capabilities fully take effect"
     pkill -f "${mihomo_bin}" || true
+  fi
+  if has_systemd_unit && is_systemd_active; then
+    was_service_active=1
+  fi
+
+  if [[ "${was_service_active}" -eq 1 ]]; then
+    echo "==> Restarting Mihomo systemd service after removing capabilities"
+    systemctl restart mihomo
+    return
   fi
 
   if [[ "${was_running}" -eq 1 ]]; then
@@ -140,7 +158,7 @@ case "${OS_NAME}" in
 
     echo
     echo "TUN capability removed."
-    echo "Any running Mihomo instance has been stopped if needed."
+    echo "If Mihomo was already running, it has been restarted without the TUN capability."
     echo "If you were using TUN mode, switch back with:"
     echo "  mihoctl mode env"
     echo "  mihoctl off"
@@ -158,7 +176,7 @@ case "${OS_NAME}" in
 
     echo
     echo "TUN service disabled."
-    echo "Any remaining Mihomo process has been stopped if needed."
+    echo "If Mihomo was already running, it has been switched back from LaunchDaemon mode."
     echo "If you were using TUN mode, switch back with:"
     echo "  mihoctl mode env"
     echo "  mihoctl off"
