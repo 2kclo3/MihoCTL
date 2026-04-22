@@ -276,6 +276,57 @@ sudo mihoctl boot off
 - 开机自启依赖系统级服务，因此通常需要管理员权限
 - 如果你已经开启 `boot on`，删除订阅前需要先执行 `mihoctl boot off`
 
+## AutoDL 推荐方案
+
+如果你用的是 AutoDL 这类 Docker 容器环境，没有 `systemd`，也不适合走传统的系统级开机自启。
+
+这种场景下，作者更推荐用 `tmux` 做“登录后自动恢复启动”。
+
+先安装 `tmux`：
+
+Ubuntu / Debian:
+
+```bash
+apt update && apt install -y tmux
+```
+
+CentOS / RHEL:
+
+```bash
+yum install -y tmux
+```
+
+macOS:
+
+```bash
+brew install tmux
+```
+
+然后执行一条命令，把自恢复启动逻辑写进你的 shell 配置文件：
+
+```bash
+mihoctl boot tmux on
+```
+
+查看状态：
+
+```bash
+mihoctl boot tmux status
+```
+
+关闭这套逻辑：
+
+```bash
+mihoctl boot tmux off
+```
+
+说明：
+
+- 这套方案会写入 `~/.profile`、`~/.bashrc`、`~/.zshrc`
+- 以后你在 AutoDL 容器里新开终端时，会自动检查 Mihomo 是否已运行
+- 如果 Mihomo 没跑，且 `mihoctl-autostart` 这个 tmux 会话也不存在，就会自动创建一个后台 tmux 会话并执行 `mihoctl start`
+- 这更适合容器环境里的“登录后自动恢复”，不是传统意义上依赖 `systemd` 的系统级开机自启
+
 ## 常见问题
 
 ### 1. 为什么 `mihoctl on` 后当前终端没有立刻生效
