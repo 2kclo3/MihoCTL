@@ -135,6 +135,22 @@ autoload -Uz compinit && compinit
 ```
 
 重新打开终端，或执行 `source ~/.zshrc`。
+
+## 9. 卸载
+
+优先在已启用 MihoCTL shell 集成的终端里执行：
+
+```bash
+mihoctl self uninstall --yes
+```
+
+这样会同时清掉当前终端里的 MihoCTL 代理环境变量。
+
+如果当前终端还找不到 `mihoctl`，再使用发行包里的卸载脚本：
+
+```bash
+./uninstall.sh
+```
 EOF
 
 echo "==> Creating archive ${ARCHIVE_PATH}"

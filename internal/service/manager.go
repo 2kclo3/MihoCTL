@@ -37,21 +37,21 @@ func (m *Manager) Enable() (*Status, error) {
 	switch runtime.GOOS {
 	case "linux":
 		if err := os.WriteFile(systemdUnitPath, []byte(m.systemdUnit()), 0o644); err != nil {
-			return nil, core.NewActionError("service_enable_failed", "err.service.enable", err, "err.service.need_root", nil, nil)
+			return nil, core.NewActionError("service_enable_failed", "err.service.enable", err, "", nil, nil)
 		}
 		if err := runCommand("systemctl", "daemon-reload"); err != nil {
-			return nil, core.NewActionError("service_enable_failed", "err.service.enable", err, "err.service.need_root", nil, nil)
+			return nil, core.NewActionError("service_enable_failed", "err.service.enable", err, "", nil, nil)
 		}
 		if err := runCommand("systemctl", "enable", "--now", "mihomo"); err != nil {
-			return nil, core.NewActionError("service_enable_failed", "err.service.enable", err, "err.service.need_root", nil, nil)
+			return nil, core.NewActionError("service_enable_failed", "err.service.enable", err, "", nil, nil)
 		}
 		return &Status{Registered: true, Enabled: true, Active: true, Path: systemdUnitPath}, nil
 	case "darwin":
 		if err := os.WriteFile(launchdPlist, []byte(m.launchdPlist()), 0o644); err != nil {
-			return nil, core.NewActionError("service_enable_failed", "err.service.enable", err, "err.service.need_root", nil, nil)
+			return nil, core.NewActionError("service_enable_failed", "err.service.enable", err, "", nil, nil)
 		}
 		if err := runCommand("launchctl", "bootstrap", "system", launchdPlist); err != nil {
-			return nil, core.NewActionError("service_enable_failed", "err.service.enable", err, "err.service.need_root", nil, nil)
+			return nil, core.NewActionError("service_enable_failed", "err.service.enable", err, "", nil, nil)
 		}
 		return &Status{Registered: true, Enabled: true, Active: true, Path: launchdPlist}, nil
 	default:
@@ -64,14 +64,14 @@ func (m *Manager) Disable() error {
 	case "linux":
 		_ = runCommand("systemctl", "disable", "--now", "mihomo")
 		if err := os.Remove(systemdUnitPath); err != nil && !os.IsNotExist(err) {
-			return core.NewActionError("service_disable_failed", "err.service.disable", err, "err.service.need_root", nil, nil)
+			return core.NewActionError("service_disable_failed", "err.service.disable", err, "", nil, nil)
 		}
 		_ = runCommand("systemctl", "daemon-reload")
 		return nil
 	case "darwin":
 		_ = runCommand("launchctl", "bootout", "system", launchdPlist)
 		if err := os.Remove(launchdPlist); err != nil && !os.IsNotExist(err) {
-			return core.NewActionError("service_disable_failed", "err.service.disable", err, "err.service.need_root", nil, nil)
+			return core.NewActionError("service_disable_failed", "err.service.disable", err, "", nil, nil)
 		}
 		return nil
 	default:

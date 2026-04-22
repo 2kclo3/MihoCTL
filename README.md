@@ -190,6 +190,20 @@ mihoctl boot status
 sudo /你的/mihoctl/完整路径 --config /你的/mihoctl/config.json boot off
 ```
 
+9. 如果你需要卸载，优先在已启用 MihoCTL shell 集成的终端里执行：
+
+```bash
+mihoctl self uninstall --yes
+```
+
+这样除了删除安装文件和 shell 集成，还会顺手清掉当前终端里的 MihoCTL 代理环境变量。
+
+如果当前终端还找不到 `mihoctl`，再退回到发行包里的卸载脚本：
+
+```bash
+./uninstall.sh
+```
+
 ## 说明
 
 - 默认会把 Mihomo 二进制安装到 MihoCTL 配置目录下的 `bin/mihomo`。

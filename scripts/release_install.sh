@@ -69,6 +69,22 @@ mihoctl() {
         . "\${_mihoctl_env_file}"
       fi
     ;;
+    sub)
+      if [[ "\${2-}" == "remove" ]]; then
+        local _mihoctl_env_file
+        _mihoctl_env_file="\$("\${_mihoctl_bin}" config env-file 2>/dev/null || true)"
+        if [[ -n "\${_mihoctl_env_file}" && -f "\${_mihoctl_env_file}" ]]; then
+          . "\${_mihoctl_env_file}"
+        fi
+      fi
+    ;;
+    self)
+      if [[ "\${2-}" == "uninstall" && \${_mihoctl_status} -eq 0 ]]; then
+        unset MIHOCTL_SYSTEM_PROXY_ENABLED
+        unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY
+        unset no_proxy NO_PROXY
+      fi
+    ;;
   esac
   return \${_mihoctl_status}
 }
@@ -97,6 +113,22 @@ mihoctl() {
       _mihoctl_env_file="\$("\${_mihoctl_bin}" config env-file 2>/dev/null || true)"
       if [[ -n "\${_mihoctl_env_file}" && -f "\${_mihoctl_env_file}" ]]; then
         . "\${_mihoctl_env_file}"
+      fi
+    ;;
+    sub)
+      if [[ "\${2-}" == "remove" ]]; then
+        local _mihoctl_env_file
+        _mihoctl_env_file="\$("\${_mihoctl_bin}" config env-file 2>/dev/null || true)"
+        if [[ -n "\${_mihoctl_env_file}" && -f "\${_mihoctl_env_file}" ]]; then
+          . "\${_mihoctl_env_file}"
+        fi
+      fi
+    ;;
+    self)
+      if [[ "\${2-}" == "uninstall" && \${_mihoctl_status} -eq 0 ]]; then
+        unset MIHOCTL_SYSTEM_PROXY_ENABLED
+        unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY
+        unset no_proxy NO_PROXY
       fi
     ;;
   esac

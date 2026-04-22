@@ -10,6 +10,9 @@ import (
 
 	"mihoctl/internal/app"
 	"mihoctl/internal/config"
+	"mihoctl/internal/core"
+	"mihoctl/internal/mode"
+	"mihoctl/internal/service"
 	"mihoctl/internal/subscription"
 )
 
@@ -149,6 +152,16 @@ func newSubscriptionCommand(application *app.App) *cobra.Command {
 			Short: application.T("cmd.sub.remove.short"),
 			Args:  cobra.ExactArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
+				if err := ensureSubscriptionRemoveAllowed(application); err != nil {
+					return err
+				}
+
+				modeManager := mode.NewManager(application.Paths, application.Config, application.State, application.MihomoClient())
+				envEnabled, err := modeManager.ModeEnabled(mode.ModeEnv)
+				if err != nil {
+					envEnabled = false
+				}
+
 				manager := subscriptionManagerFromCmd(application, cmd)
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
@@ -160,10 +173,21 @@ func newSubscriptionCommand(application *app.App) *cobra.Command {
 				if err := application.SaveConfig(); err != nil {
 					return err
 				}
+				if envEnabled {
+					if err := modeManager.SetSystemProxy(false); err != nil {
+						return err
+					}
+					if err := application.SaveState(); err != nil {
+						return err
+					}
+				}
 				fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.sub.remove.success", map[string]any{
 					"name": entry.Name,
 					"url":  entry.URL,
 				}))
+				if envEnabled {
+					fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.sub.remove.env_off"))
+				}
 				return nil
 			},
 		},
@@ -207,4 +231,17 @@ func normalizeEntry(entry config.Subscription, subDir string) config.Subscriptio
 		entry.ConfigPath = filepath.Join(subDir, entry.Name+".yaml")
 	}
 	return entry
+}
+
+func ensureSubscriptionRemoveAllowed(application *app.App) error {
+	status, err := service.NewManager(application.Config).Status()
+	if err != nil {
+		return err
+	}
+	if !status.Registered && !status.Enabled {
+		return nil
+	}
+	return core.NewActionError("subscription_remove_boot_enabled", "err.subscription.remove_boot_enabled", nil, "err.subscription.remove_boot_enabled_hint", nil, map[string]any{
+		"command": "mihoctl boot off",
+	})
 }

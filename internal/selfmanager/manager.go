@@ -68,9 +68,14 @@ func (m *Manager) Install(targetDir string) (*InstallResult, error) {
 }
 
 func (m *Manager) Uninstall(cfg *config.Config) (*UninstallResult, error) {
+	if err := m.preflightUninstall(); err != nil {
+		return nil, err
+	}
+
 	result := &UninstallResult{}
 
 	stopMihomoRuntime(result, cfg)
+	removeServiceArtifacts(result)
 
 	removeFile(result, m.paths.ExecPath)
 	removeFile(result, filepath.Join(m.paths.ExecDir, "mihoctl-enable-tun"))
@@ -114,8 +119,30 @@ func (m *Manager) Uninstall(cfg *config.Config) (*UninstallResult, error) {
 		}
 	}
 
-	removeServiceArtifacts(result)
 	return result, nil
+}
+
+func (m *Manager) preflightUninstall() error {
+	artifactPath := managedServiceArtifactPath()
+	if artifactPath == "" {
+		return nil
+	}
+	if _, err := os.Stat(artifactPath); err != nil {
+		return nil
+	}
+	if os.Geteuid() == 0 {
+		return nil
+	}
+	return core.NewActionError(
+		"self_uninstall_requires_boot_off",
+		"err.self.uninstall_boot_enabled",
+		nil,
+		"err.self.uninstall_boot_enabled_hint",
+		nil,
+		map[string]any{
+			"command": "mihoctl boot off",
+		},
+	)
 }
 
 func (m *Manager) defaultInstallDir() (string, string, error) {
@@ -250,11 +277,21 @@ func removeManagedBlock(result *UninstallResult, path, startMarker, endMarker, l
 }
 
 func removeServiceArtifacts(result *UninstallResult) {
+	path := managedServiceArtifactPath()
+	if path == "" {
+		return
+	}
+	removeFile(result, path)
+}
+
+func managedServiceArtifactPath() string {
 	switch runtime.GOOS {
 	case "linux":
-		removeFile(result, "/etc/systemd/system/mihomo.service")
+		return "/etc/systemd/system/mihomo.service"
 	case "darwin":
-		removeFile(result, "/Library/LaunchDaemons/com.mihoctl.mihomo.plist")
+		return "/Library/LaunchDaemons/com.mihoctl.mihomo.plist"
+	default:
+		return ""
 	}
 }
 
