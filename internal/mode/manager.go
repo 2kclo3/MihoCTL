@@ -16,6 +16,7 @@ import (
 
 	"mihoctl/internal/config"
 	"mihoctl/internal/core"
+	"mihoctl/internal/i18n"
 	"mihoctl/internal/mihomo"
 	"mihoctl/internal/state"
 )
@@ -399,93 +400,50 @@ func (m *Manager) tunPermissionSteps(binaryPath, helperPath string) string {
 		helperPath = shellQuote(helperPath)
 	}
 
-	if strings.EqualFold(strings.TrimSpace(m.cfg.Language), "en-US") {
-		if helperExists && (runtime.GOOS == "linux" || runtime.GOOS == "darwin") {
-			if alreadyAdmin {
-				return fmt.Sprintf(
-					"Run `%s` once, then rerun `mihoctl mode tun` or `mihoctl on` as needed; if TUN still does not work, inspect the log %s",
-					helperPath,
-					logPath,
-				)
-			}
-			return fmt.Sprintf(
-				"This operation requires administrator privileges. Run `sudo %s` once, then rerun `mihoctl mode tun` or `mihoctl on` as needed; if TUN still does not work, inspect the log %s",
-				helperPath,
-				logPath,
-			)
-		}
-		switch runtime.GOOS {
-		case "linux":
-			if alreadyAdmin {
-				return fmt.Sprintf(
-					"Run `setcap cap_net_admin,cap_net_raw+ep %s` once, then rerun `mihoctl mode tun` or `mihoctl on` as needed; if TUN still does not work, inspect the log %s",
-					binaryPath,
-					logPath,
-				)
-			}
-			return fmt.Sprintf(
-				"This operation requires administrator privileges. Run `sudo setcap cap_net_admin,cap_net_raw+ep %s` once, then rerun `mihoctl mode tun` or `mihoctl on` as needed; if TUN still does not work, inspect the log %s",
-				binaryPath,
-				logPath,
-			)
-		case "darwin":
-			if alreadyAdmin {
-				return fmt.Sprintf("Restart Mihomo, then rerun `mihoctl on`; if TUN still does not work, inspect the log %s", logPath)
-			}
-			return fmt.Sprintf("This operation requires administrator privileges. Restart Mihomo with administrator privileges, then rerun `mihoctl on`; if TUN still does not work, inspect the log %s", logPath)
-		default:
-			if alreadyAdmin {
-				return fmt.Sprintf("Restart Mihomo, then inspect the log %s", logPath)
-			}
-			return fmt.Sprintf("This operation requires administrator privileges. Restart Mihomo with administrator privileges, then inspect the log %s", logPath)
-		}
-	}
-
+	tr := i18n.New(m.cfg.Language)
 	if helperExists && (runtime.GOOS == "linux" || runtime.GOOS == "darwin") {
 		if alreadyAdmin {
-			return fmt.Sprintf(
-				"请先执行一次 `%s`，然后按需要重新执行 `mihoctl mode tun` 或 `mihoctl on`；如果仍然失败，再查看日志 `%s`",
-				helperPath,
-				logPath,
-			)
+			return tr.Tf("msg.mode.tun.permission.helper.admin", map[string]any{
+				"helper": helperPath,
+				"log":    logPath,
+			})
 		}
-		return fmt.Sprintf(
-			"当前操作需要使用管理员权限。请先执行一次 `sudo %s`，然后按需要重新执行 `mihoctl mode tun` 或 `mihoctl on`；如果仍然失败，再查看日志 `%s`",
-			helperPath,
-			logPath,
-		)
+		return tr.Tf("msg.mode.tun.permission.helper.sudo", map[string]any{
+			"helper": helperPath,
+			"log":    logPath,
+		})
 	}
 
 	switch runtime.GOOS {
 	case "linux":
 		if alreadyAdmin {
-			return fmt.Sprintf(
-				"请先执行一次 `setcap cap_net_admin,cap_net_raw+ep %s`，然后按需要重新执行 `mihoctl mode tun` 或 `mihoctl on`；如果仍然失败，再查看日志 `%s`",
-				binaryPath,
-				logPath,
-			)
+			return tr.Tf("msg.mode.tun.permission.setcap.admin", map[string]any{
+				"binary": binaryPath,
+				"log":    logPath,
+			})
 		}
-		return fmt.Sprintf(
-			"当前操作需要使用管理员权限。请先执行一次 `sudo setcap cap_net_admin,cap_net_raw+ep %s`，然后按需要重新执行 `mihoctl mode tun` 或 `mihoctl on`；如果仍然失败，再查看日志 `%s`",
-			binaryPath,
-			logPath,
-		)
+		return tr.Tf("msg.mode.tun.permission.setcap.sudo", map[string]any{
+			"binary": binaryPath,
+			"log":    logPath,
+		})
 	case "darwin":
 		if alreadyAdmin {
-			return fmt.Sprintf(
-				"请重新启动 Mihomo，然后重新执行 `mihoctl on`；如果仍然失败，再查看日志 `%s`",
-				logPath,
-			)
+			return tr.Tf("msg.mode.tun.permission.restart_on.admin", map[string]any{
+				"log": logPath,
+			})
 		}
-		return fmt.Sprintf(
-			"当前操作需要使用管理员权限。请用管理员重新启动 Mihomo，然后重新执行 `mihoctl on`；如果仍然失败，再查看日志 `%s`",
-			logPath,
-		)
+		return tr.Tf("msg.mode.tun.permission.restart_on.sudo", map[string]any{
+			"log": logPath,
+		})
 	default:
 		if alreadyAdmin {
-			return fmt.Sprintf("请重新启动 Mihomo，并查看日志 `%s`", logPath)
+			return tr.Tf("msg.mode.tun.permission.restart_only.admin", map[string]any{
+				"log": logPath,
+			})
 		}
-		return fmt.Sprintf("当前操作需要使用管理员权限。请用管理员权限重新启动 Mihomo，并查看日志 `%s`", logPath)
+		return tr.Tf("msg.mode.tun.permission.restart_only.sudo", map[string]any{
+			"log": logPath,
+		})
 	}
 }
 

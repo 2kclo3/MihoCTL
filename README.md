@@ -30,14 +30,7 @@ tar -xzf mihoctl-linux-amd64.tar.gz
 cd mihoctl-linux-amd64
 ```
 
-2. 首次离线安装基础内核：
-
-```bash
-chmod +x ./mihoctl
-./mihoctl core install
-```
-
-更省事的方式是直接运行安装脚本：
+2. 运行安装脚本：
 
 ```bash
 chmod +x ./install.sh
