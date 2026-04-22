@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -76,6 +78,7 @@ func (m *Manager) Start() (*state.ProcessState, error) {
 	cmd := exec.Command(binary, "-d", m.cfg.Mihomo.WorkDir, "-f", m.cfg.Mihomo.ConfigPath)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
+	cmd.Env = buildProcessEnv(os.Environ())
 	prepareDetachedCommand(cmd)
 
 	if err := cmd.Start(); err != nil {
@@ -154,4 +157,56 @@ func stopPID(pid int) error {
 		time.Sleep(200 * time.Millisecond)
 	}
 	return syscall.Kill(pid, syscall.SIGKILL)
+}
+
+func buildProcessEnv(base []string) []string {
+	if runtime.GOOS != "linux" {
+		return base
+	}
+	return ensurePATHEntries(base, []string{"/usr/local/sbin", "/usr/sbin", "/sbin"})
+}
+
+func ensurePATHEntries(env []string, extra []string) []string {
+	if len(extra) == 0 {
+		return env
+	}
+
+	result := append([]string(nil), env...)
+	pathIndex := -1
+	pathValue := ""
+	for i, item := range result {
+		if strings.HasPrefix(item, "PATH=") {
+			pathIndex = i
+			pathValue = strings.TrimPrefix(item, "PATH=")
+			break
+		}
+	}
+
+	parts := make([]string, 0, len(extra)+4)
+	seen := map[string]struct{}{}
+	add := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		if _, ok := seen[value]; ok {
+			return
+		}
+		seen[value] = struct{}{}
+		parts = append(parts, value)
+	}
+
+	for _, value := range strings.Split(pathValue, ":") {
+		add(value)
+	}
+	for _, value := range extra {
+		add(value)
+	}
+
+	pathEntry := "PATH=" + strings.Join(parts, ":")
+	if pathIndex >= 0 {
+		result[pathIndex] = pathEntry
+		return result
+	}
+	return append(result, pathEntry)
 }

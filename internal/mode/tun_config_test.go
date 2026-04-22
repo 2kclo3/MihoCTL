@@ -83,6 +83,21 @@ func TestUpsertTunConfigContentPreservesDNSEnableWhenTurningTunOff(t *testing.T)
 	}
 }
 
+func TestUpsertTunConfigContentCanDisableLinuxAutoRedirect(t *testing.T) {
+	content := "mixed-port: 7890\nmode: rule\n"
+
+	updated := upsertTunConfigContentWithOptions(content, true, "linux", tunRenderOptions{
+		linuxAutoRedirect: false,
+	})
+
+	if strings.Contains(updated, "  auto-redirect: true") {
+		t.Fatalf("expected linux auto-redirect to be omitted when iptables is unavailable: %s", updated)
+	}
+	if !strings.Contains(updated, "  auto-route: true") {
+		t.Fatalf("expected other tun options to remain enabled: %s", updated)
+	}
+}
+
 func TestReadTunEnabledFromContent(t *testing.T) {
 	content := strings.Join([]string{
 		"mixed-port: 7890",

@@ -77,6 +77,41 @@ func TestUpsertManagedShellBlockIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestEnsureLinuxShellIntegrationUsesDynamicEnvShellCommand(t *testing.T) {
+	tempDir := t.TempDir()
+	homeDir := filepath.Join(tempDir, "home")
+	if err := os.MkdirAll(homeDir, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+
+	t.Setenv("HOME", homeDir)
+
+	manager := NewManager(config.Paths{
+		AppHome:    filepath.Join(tempDir, "app"),
+		ExecPath:   "/usr/local/bin/mihoctl",
+		ConfigFile: filepath.Join(tempDir, "app", "config.json"),
+	}, &config.Config{
+		SystemProxy: config.SystemProxy{
+			Host: "127.0.0.1",
+			Port: 7890,
+		},
+	}, &state.State{}, mihomo.NewClient("http://127.0.0.1:9090", ""))
+
+	if err := manager.ensureLinuxShellIntegration(filepath.Join(tempDir, "app", linuxProxyEnvFileName)); err != nil {
+		t.Fatalf("ensureLinuxShellIntegration failed: %v", err)
+	}
+
+	for _, name := range []string{".profile", ".bashrc", ".zshrc"} {
+		data := readFileForTest(t, filepath.Join(homeDir, name))
+		if !strings.Contains(data, `config env-shell`) {
+			t.Fatalf("expected dynamic env-shell command in %s, got: %s", name, data)
+		}
+		if strings.Contains(data, `system-proxy.env" ] && .`) {
+			t.Fatalf("expected static env-file sourcing to be removed in %s, got: %s", name, data)
+		}
+	}
+}
+
 func readFileForTest(t *testing.T, path string) string {
 	t.Helper()
 	data, err := os.ReadFile(path)

@@ -3,6 +3,7 @@ package mode
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"runtime"
 	"strings"
 )
@@ -17,7 +18,7 @@ func upsertTunConfigFile(path string, enabled bool) error {
 	if err != nil {
 		return err
 	}
-	updated := upsertTunConfigContent(string(data), enabled, runtime.GOOS)
+	updated := upsertTunConfigContentWithOptions(string(data), enabled, runtime.GOOS, detectTunRenderOptions(runtime.GOOS))
 	if updated == string(data) {
 		return nil
 	}
@@ -34,7 +35,11 @@ func readTunEnabledFromConfigFile(path string) (*bool, error) {
 
 // 只管理顶层 tun 段，避免为了一个小开关引入完整 YAML 解析依赖。
 func upsertTunConfigContent(content string, enabled bool, goos string) string {
-	block := renderTunManagedBlock(enabled, goos)
+	return upsertTunConfigContentWithOptions(content, enabled, goos, defaultTunRenderOptions(goos))
+}
+
+func upsertTunConfigContentWithOptions(content string, enabled bool, goos string, options tunRenderOptions) string {
+	block := renderTunManagedBlock(enabled, goos, options)
 
 	if updated, ok := replaceManagedBlock(content, block); ok {
 		content = updated
@@ -50,6 +55,24 @@ func upsertTunConfigContent(content string, enabled bool, goos string) string {
 		content = ensureDNSEnabled(content)
 	}
 	return content
+}
+
+type tunRenderOptions struct {
+	linuxAutoRedirect bool
+}
+
+func defaultTunRenderOptions(goos string) tunRenderOptions {
+	return tunRenderOptions{
+		linuxAutoRedirect: goos == "linux",
+	}
+}
+
+func detectTunRenderOptions(goos string) tunRenderOptions {
+	options := defaultTunRenderOptions(goos)
+	if goos == "linux" && !iptablesAvailable() {
+		options.linuxAutoRedirect = false
+	}
+	return options
 }
 
 func readTunEnabledFromContent(content string) *bool {
@@ -77,7 +100,7 @@ func readTunEnabledFromContent(content string) *bool {
 	return nil
 }
 
-func renderTunManagedBlock(enabled bool, goos string) string {
+func renderTunManagedBlock(enabled bool, goos string, options tunRenderOptions) string {
 	lines := []string{
 		tunManagedStart,
 		"tun:",
@@ -90,11 +113,28 @@ func renderTunManagedBlock(enabled bool, goos string) string {
 		"  auto-detect-interface: true",
 		"  strict-route: true",
 	}
-	if goos == "linux" {
+	if goos == "linux" && options.linuxAutoRedirect {
 		lines = append(lines, "  auto-redirect: true")
 	}
 	lines = append(lines, tunManagedEnd)
 	return strings.Join(lines, "\n") + "\n"
+}
+
+func iptablesAvailable() bool {
+	if _, err := exec.LookPath("iptables"); err == nil {
+		return true
+	}
+	for _, candidate := range []string{"/usr/local/sbin/iptables", "/usr/sbin/iptables", "/sbin/iptables", "/usr/bin/iptables", "/bin/iptables"} {
+		if stat, err := os.Stat(candidate); err == nil && !stat.IsDir() {
+			return true
+		}
+	}
+	return false
+}
+
+func tunDeviceAvailable() bool {
+	stat, err := os.Stat("/dev/net/tun")
+	return err == nil && !stat.IsDir()
 }
 
 func ensureDNSEnabled(content string) string {

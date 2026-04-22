@@ -36,6 +36,9 @@ func NewManager(cfg *config.Config) *Manager {
 func (m *Manager) Enable() (*Status, error) {
 	switch runtime.GOOS {
 	case "linux":
+		if !linuxSystemdAvailable() {
+			return nil, core.NewActionError("service_systemd_unavailable", "err.service.systemd_unavailable", nil, "", nil, nil)
+		}
 		if err := os.WriteFile(systemdUnitPath, []byte(m.systemdUnit()), 0o644); err != nil {
 			return nil, core.NewActionError("service_enable_failed", "err.service.enable", err, "", nil, nil)
 		}
@@ -62,6 +65,9 @@ func (m *Manager) Enable() (*Status, error) {
 func (m *Manager) Disable() error {
 	switch runtime.GOOS {
 	case "linux":
+		if !linuxSystemdAvailable() {
+			return core.NewActionError("service_systemd_unavailable", "err.service.systemd_unavailable", nil, "", nil, nil)
+		}
 		_ = runCommand("systemctl", "disable", "--now", "mihomo")
 		if err := os.Remove(systemdUnitPath); err != nil && !os.IsNotExist(err) {
 			return core.NewActionError("service_disable_failed", "err.service.disable", err, "", nil, nil)
@@ -82,6 +88,9 @@ func (m *Manager) Disable() error {
 func (m *Manager) Status() (*Status, error) {
 	switch runtime.GOOS {
 	case "linux":
+		if !linuxSystemdAvailable() {
+			return nil, core.NewActionError("service_systemd_unavailable", "err.service.systemd_unavailable", nil, "", nil, nil)
+		}
 		status := &Status{Path: systemdUnitPath}
 		if _, err := os.Stat(systemdUnitPath); err == nil {
 			status.Registered = true
@@ -161,4 +170,21 @@ func runCommand(name string, args ...string) error {
 		return fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
 	}
 	return nil
+}
+
+func linuxSystemdAvailable() bool {
+	if runtime.GOOS != "linux" {
+		return false
+	}
+	if _, err := exec.LookPath("systemctl"); err != nil {
+		return false
+	}
+	if _, err := os.Stat("/run/systemd/system"); err == nil {
+		return true
+	}
+	data, err := os.ReadFile("/proc/1/comm")
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(data)) == "systemd"
 }

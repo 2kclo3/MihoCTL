@@ -2,12 +2,14 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"mihoctl/internal/app"
+	"mihoctl/internal/core"
 	"mihoctl/internal/mode"
 	"mihoctl/internal/process"
 	"mihoctl/internal/service"
@@ -40,14 +42,38 @@ func newStopCommand(application *app.App) *cobra.Command {
 		Use:   "stop",
 		Short: application.T("cmd.stop.short"),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			manager := process.NewManager(application.Config, application.State, application.Paths)
-			if err := manager.Stop(); err != nil {
+			processManager := process.NewManager(application.Config, application.State, application.Paths)
+			modeManager := mode.NewManager(application.Paths, application.Config, application.State, application.MihomoClient())
+
+			currentMode := mode.ResolveMode(application.Config.Mode)
+			envEnabled := false
+			if currentMode == mode.ModeEnv {
+				if enabled, err := modeManager.ModeEnabled(mode.ModeEnv); err == nil {
+					envEnabled = enabled
+				}
+			}
+
+			err := processManager.Stop()
+			if err != nil && !isProcessNotRunningError(err) {
 				return err
 			}
+
+			envDisabled := false
+			if envEnabled {
+				if err := modeManager.SetSystemProxy(false); err != nil {
+					return err
+				}
+				envDisabled = true
+			}
+
 			if err := application.SaveState(); err != nil {
 				return err
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.stop.success"))
+			if envDisabled {
+				fmt.Fprintln(cmd.OutOrStdout(), application.T("msg.stop.env_off"))
+				fmt.Fprintln(cmd.OutOrStdout(), application.Tf("msg.mode.env.off.hint", envHintData(application)))
+			}
 			return nil
 		},
 	}
@@ -166,4 +192,9 @@ func formatDuration(d time.Duration) string {
 		return d.Truncate(time.Minute).String()
 	}
 	return d.Truncate(time.Minute).String()
+}
+
+func isProcessNotRunningError(err error) bool {
+	var actionErr *core.ActionError
+	return errors.As(err, &actionErr) && actionErr.Code == "process_not_running"
 }

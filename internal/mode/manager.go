@@ -401,6 +401,18 @@ func (m *Manager) tunPermissionSteps(binaryPath, helperPath string) string {
 	}
 
 	tr := i18n.New(m.cfg.Language)
+	if runtime.GOOS == "linux" {
+		if !tunDeviceAvailable() {
+			return tr.Tf("msg.mode.tun.permission.device_missing", map[string]any{
+				"log": logPath,
+			})
+		}
+		if !iptablesAvailable() {
+			return tr.Tf("msg.mode.tun.permission.iptables_missing", map[string]any{
+				"log": logPath,
+			})
+		}
+	}
 	if helperExists && (runtime.GOOS == "linux" || runtime.GOOS == "darwin") {
 		if alreadyAdmin {
 			return tr.Tf("msg.mode.tun.permission.helper.admin", map[string]any{

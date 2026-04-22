@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"net"
 	"path/filepath"
 	"time"
 
@@ -9,6 +10,8 @@ import (
 
 	"mihoctl/internal/app"
 	"mihoctl/internal/core"
+	"mihoctl/internal/mode"
+	"mihoctl/internal/process"
 )
 
 func newConfigCommand(application *app.App) *cobra.Command {
@@ -24,6 +27,15 @@ func newConfigCommand(application *app.App) *cobra.Command {
 			Hidden: true,
 			RunE: func(cmd *cobra.Command, args []string) error {
 				fmt.Fprintln(cmd.OutOrStdout(), filepath.Join(application.Paths.AppHome, "system-proxy.env"))
+				return nil
+			},
+		},
+		&cobra.Command{
+			Use:    "env-shell",
+			Short:  "render current proxy shell exports",
+			Hidden: true,
+			RunE: func(cmd *cobra.Command, args []string) error {
+				fmt.Fprint(cmd.OutOrStdout(), renderManagedEnvShell(application))
 				return nil
 			},
 		},
@@ -100,6 +112,33 @@ func newConfigCommand(application *app.App) *cobra.Command {
 	)
 
 	return configCmd
+}
+
+func renderManagedEnvShell(application *app.App) string {
+	manager := mode.NewManager(application.Paths, application.Config, application.State, application.MihomoClient())
+	status, err := manager.SystemProxyStatus()
+	if err != nil || !status.Known || !status.Enabled {
+		return manager.RenderLinuxProxyEnv(false)
+	}
+	if !proxyEndpointReachable(application) {
+		return manager.RenderLinuxProxyEnv(false)
+	}
+	return manager.RenderLinuxProxyEnv(true)
+}
+
+func proxyEndpointReachable(application *app.App) bool {
+	address := net.JoinHostPort(application.Config.SystemProxy.Host, fmt.Sprintf("%d", application.Config.SystemProxy.Port))
+	conn, err := net.DialTimeout("tcp", address, 300*time.Millisecond)
+	if err == nil {
+		_ = conn.Close()
+		return true
+	}
+
+	processStatus, statusErr := process.NewManager(application.Config, application.State, application.Paths).Status()
+	if statusErr != nil {
+		return false
+	}
+	return processStatus.Running
 }
 
 func formatTime(value time.Time, fallback string) string {

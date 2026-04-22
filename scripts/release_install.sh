@@ -62,20 +62,12 @@ mihoctl() {
   "\${_mihoctl_bin}" "\$@"
   local _mihoctl_status=\$?
   case "\${1-}" in
-    on|off|mode)
-      local _mihoctl_env_file
-      _mihoctl_env_file="\$("\${_mihoctl_bin}" config env-file 2>/dev/null || true)"
-      if [[ -n "\${_mihoctl_env_file}" && -f "\${_mihoctl_env_file}" ]]; then
-        . "\${_mihoctl_env_file}"
-      fi
+    on|off|mode|stop)
+      eval "\$("\${_mihoctl_bin}" config env-shell 2>/dev/null || true)"
     ;;
     sub)
       if [[ "\${2-}" == "remove" ]]; then
-        local _mihoctl_env_file
-        _mihoctl_env_file="\$("\${_mihoctl_bin}" config env-file 2>/dev/null || true)"
-        if [[ -n "\${_mihoctl_env_file}" && -f "\${_mihoctl_env_file}" ]]; then
-          . "\${_mihoctl_env_file}"
-        fi
+        eval "\$("\${_mihoctl_bin}" config env-shell 2>/dev/null || true)"
       fi
     ;;
     self)
@@ -108,20 +100,12 @@ mihoctl() {
   "\${_mihoctl_bin}" "\$@"
   local _mihoctl_status=\$?
   case "\${1-}" in
-    on|off|mode)
-      local _mihoctl_env_file
-      _mihoctl_env_file="\$("\${_mihoctl_bin}" config env-file 2>/dev/null || true)"
-      if [[ -n "\${_mihoctl_env_file}" && -f "\${_mihoctl_env_file}" ]]; then
-        . "\${_mihoctl_env_file}"
-      fi
+    on|off|mode|stop)
+      eval "\$("\${_mihoctl_bin}" config env-shell 2>/dev/null || true)"
     ;;
     sub)
       if [[ "\${2-}" == "remove" ]]; then
-        local _mihoctl_env_file
-        _mihoctl_env_file="\$("\${_mihoctl_bin}" config env-file 2>/dev/null || true)"
-        if [[ -n "\${_mihoctl_env_file}" && -f "\${_mihoctl_env_file}" ]]; then
-          . "\${_mihoctl_env_file}"
-        fi
+        eval "\$("\${_mihoctl_bin}" config env-shell 2>/dev/null || true)"
       fi
     ;;
     self)

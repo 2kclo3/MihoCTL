@@ -61,6 +61,10 @@ func (m *Manager) linuxProxyEnvFile() string {
 	return filepath.Join(m.paths.AppHome, linuxProxyEnvFileName)
 }
 
+func (m *Manager) RenderLinuxProxyEnv(enabled bool) string {
+	return m.renderLinuxProxyEnv(enabled)
+}
+
 func (m *Manager) renderLinuxProxyEnv(enabled bool) string {
 	httpProxy := fmt.Sprintf("http://%s:%d", m.cfg.SystemProxy.Host, m.cfg.SystemProxy.Port)
 	socksProxy := fmt.Sprintf("socks5://%s:%d", m.cfg.SystemProxy.Host, m.cfg.SystemProxy.Port)
@@ -101,9 +105,20 @@ func (m *Manager) ensureLinuxShellIntegration(envPath string) error {
 		filepath.Join(home, ".zshrc"),
 	}
 
+	executable := strings.TrimSpace(m.paths.ExecPath)
+	if executable == "" {
+		executable = "mihoctl"
+	}
+	command := strings.Join([]string{
+		shellQuote(executable),
+		"--config",
+		shellQuote(m.paths.ConfigFile),
+		"config",
+		"env-shell",
+	}, " ")
 	block := strings.Join([]string{
 		linuxProxyManagedStart,
-		fmt.Sprintf("[ -f %q ] && . %q", envPath, envPath),
+		fmt.Sprintf("eval \"$(%s 2>/dev/null || true)\"", command),
 		linuxProxyManagedEnd,
 		"",
 	}, "\n")

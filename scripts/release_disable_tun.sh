@@ -88,15 +88,29 @@ run_as_target_user() {
 
 restart_user_managed_runtime() {
   echo "==> Restarting user-managed Mihomo process"
+  if [[ "${TARGET_USER}" == "root" ]]; then
+    HOME="${TARGET_HOME}" "${MIHOCTL_BIN}" --config "${TARGET_CONFIG}" start >/dev/null || true
+    return
+  fi
   run_as_target_user "${TARGET_USER}" "${MIHOCTL_BIN}" --config "${TARGET_CONFIG}" start >/dev/null || true
 }
 
+systemd_available() {
+  if ! command -v systemctl >/dev/null 2>&1; then
+    return 1
+  fi
+  if [[ -d /run/systemd/system ]]; then
+    return 0
+  fi
+  [[ "$(cat /proc/1/comm 2>/dev/null || true)" == "systemd" ]]
+}
+
 has_systemd_unit() {
-  [[ -f /etc/systemd/system/mihomo.service ]]
+  systemd_available && [[ -f /etc/systemd/system/mihomo.service ]]
 }
 
 is_systemd_active() {
-  command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet mihomo
+  systemd_available && systemctl is-active --quiet mihomo >/dev/null 2>&1
 }
 
 stop_linux_runtime() {
